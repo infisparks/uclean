@@ -9,7 +9,7 @@ interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultService?: 'pickup' | 'home-visit' | 'vip-membership' | 'general-inquiry';
-  defaultTier?: 'Silver (₹5,000)' | 'Gold (₹7,000)' | 'Platinum (₹10,000)';
+  defaultTier?: 'Silver (₹5,000 )' | 'Gold (₹7,000)' | 'Platinum (₹10,000)';
   prefilledItems?: { name: string; quantity: number; price: number }[];
   totalEstimate?: number;
 }
