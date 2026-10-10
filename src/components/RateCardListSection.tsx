@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, Sparkles, ArrowRight, Plus } from 'lucide-react';
+import { Search, ArrowRight } from 'lucide-react';
 import { RATE_ITEMS } from '@/lib/rateData';
 
 interface RateCardListSectionProps {
@@ -21,22 +21,40 @@ export function RateCardListSection({ onOrderNow, searchFilter = '' }: RateCardL
 
   const categories = [
     { key: 'all', label: 'All Items' },
-    { key: 'men-suits', label: '👔 Suits & Ethnic' },
-    { key: 'women-ethnic', label: '👗 Women\'s Ethnic' },
-    { key: 'winterwear', label: '🧥 Winterwear' },
-    { key: 'dailywear', label: '👕 Daily Wear' },
-    { key: 'footwear', label: '👟 Footwear & Shawls' },
+    { key: 'men-suits', label: "👔 Men's Suits & Ethnic" },
+    { key: 'men-winter', label: "🧥 Men's Winter & Jackets" },
+    { key: 'men-daily', label: "👕 Men's Daily Wear" },
+    { key: 'women-ethnic', label: "👗 Women's Ethnic & Festive" },
+    { key: 'women-coats', label: "🧥 Women's Coats" },
+    { key: 'footwear', label: '👟 Footwear & Shoe Spa' },
+    { key: 'men-accessories', label: '🧣 Shawls & Accessories' },
   ];
 
   const filteredItems = useMemo(() => {
-    const q = (localSearch || '').toLowerCase().trim();
+    const raw = (localSearch || '').toLowerCase().trim();
+    if (!raw) {
+      return activeCategory === 'all'
+        ? RATE_ITEMS
+        : RATE_ITEMS.filter((item) => item.categoryKey === activeCategory);
+    }
+
+    // Split search into individual words for broad multi-word search
+    const searchTokens = raw
+      .replace(/[–—/(),+]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+
     return RATE_ITEMS.filter((item) => {
       const matchCat = activeCategory === 'all' || item.categoryKey === activeCategory;
-      const matchSearch =
-        !q ||
-        item.name.toLowerCase().includes(q) ||
-        item.categoryName.toLowerCase().includes(q);
-      return matchCat && matchSearch;
+      
+      const searchableString = `${item.name} ${item.categoryName} ${item.gender || ''} ${item.id} ₹${item.price}`
+        .toLowerCase()
+        .replace(/[–—/(),+]/g, ' ');
+
+      // Every typed word should match anywhere in the item data
+      const matchSearch = searchTokens.every((token) => searchableString.includes(token));
+
+      return (activeCategory === 'all' ? true : matchCat) && matchSearch;
     });
   }, [localSearch, activeCategory]);
 
@@ -52,7 +70,7 @@ export function RateCardListSection({ onOrderNow, searchFilter = '' }: RateCardL
           Dry Cleaning &amp; Garment Care
         </h2>
         <p className="text-[12px] text-[#4e6b5d] mt-0.5">
-          Tap <strong>&ldquo;+ Book&rdquo;</strong> on any garment to schedule instant free pickup.
+          Tap <strong>&ldquo;Order&rdquo;</strong> on any garment to schedule instant free pickup.
         </p>
       </div>
 
@@ -62,14 +80,14 @@ export function RateCardListSection({ onOrderNow, searchFilter = '' }: RateCardL
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#632608]" />
           <input
             type="text"
-            placeholder="Search dry cleaning rates..."
+            placeholder="Search dry cleaning rates (e.g. Jacket, Sherwani, Saree, Shawl, Shoes)..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             className="w-full h-10 pl-9 pr-4 bg-white border-[1.5px] border-[#DECBB0] rounded-xl text-xs text-[#0c2b1e] font-semibold focus:outline-none focus:ring-2 focus:ring-[#008f51] shadow-sm"
           />
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar select-none">
           {categories.map((cat) => (
             <button
               key={cat.key}
@@ -86,8 +104,8 @@ export function RateCardListSection({ onOrderNow, searchFilter = '' }: RateCardL
         </div>
       </div>
 
-      {/* Rate Card Table matching user screenshot layout */}
-      <div className="bg-white rounded-[22px] border-[1.5px] border-[#DECBB0] overflow-hidden shadow-[0_4px_20px_rgba(0,30,15,0.06)] divide-y divide-[#f2e9dc] max-h-[520px] overflow-y-auto">
+      {/* Rate Card Table with Exact User Rates */}
+      <div className="bg-white rounded-[22px] border-[1.5px] border-[#DECBB0] overflow-hidden shadow-[0_4px_20px_rgba(0,30,15,0.06)] divide-y divide-[#f2e9dc] max-h-[540px] overflow-y-auto">
         {filteredItems.length === 0 ? (
           <div className="p-8 text-center text-xs text-[#64748b]">
             No items found matching &quot;{localSearch}&quot;.
@@ -99,23 +117,37 @@ export function RateCardListSection({ onOrderNow, searchFilter = '' }: RateCardL
               onClick={() => onOrderNow(`Dry Cleaning — ${item.name}`, item.name)}
               className="p-3 px-3.5 flex items-center justify-between gap-3 hover:bg-[#FAF6EE] active:bg-[#f0ece1] transition-colors group cursor-pointer"
             >
-              {/* Left Garment Block matching exact user screenshot */}
+              {/* Left Garment Block with Item-Specific Icons and Colored Badges */}
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="w-10 h-10 rounded-2xl bg-[#eaf9f1] border border-[#a7f3d0] flex items-center justify-center shrink-0 text-lg shadow-sm">
-                  {item.colorScheme === 'disc-gold' ? '👑' : item.colorScheme === 'disc-pink' ? '👗' : item.colorScheme === 'disc-blue' ? '🧥' : '🎁'}
+                <div
+                  className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 text-xl shadow-xs border ${
+                    item.colorScheme === 'disc-gold'
+                      ? 'bg-[#fffbeb] border-[#fde68a]'
+                      : item.colorScheme === 'disc-pink'
+                      ? 'bg-[#fdf2f8] border-[#fbcfe8]'
+                      : item.colorScheme === 'disc-blue'
+                      ? 'bg-[#f0f9ff] border-[#bae6fd]'
+                      : item.colorScheme === 'disc-purple'
+                      ? 'bg-[#faf5ff] border-[#e9d5ff]'
+                      : item.colorScheme === 'disc-amber'
+                      ? 'bg-[#fff7ed] border-[#fed7aa]'
+                      : 'bg-[#eaf9f1] border-[#a7f3d0]'
+                  }`}
+                >
+                  <span>{item.icon}</span>
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <span className="font-heading font-black text-[14px] sm:text-[15px] text-[#072618] block leading-snug group-hover:text-[#008f51] transition-colors">
+                  <span className="font-heading font-black text-[13px] sm:text-[14px] text-[#072618] block leading-snug group-hover:text-[#008f51] transition-colors truncate">
                     {item.name}
                   </span>
-                  <span className="text-[11px] font-semibold text-[#527362] block mt-0.5">
+                  <span className="text-[11px] font-semibold text-[#527362] block mt-0.5 truncate">
                     {item.categoryName}
                   </span>
                 </div>
               </div>
 
-              {/* Price Pill Tag & Arranged Compact Order Now Action */}
+              {/* Price Tag & Action */}
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="font-heading text-[12.5px] sm:text-[13px] font-black text-[#00874c] bg-[#eaf9f1] border border-[#a7f3d0] px-2.5 py-1 rounded-full whitespace-nowrap shadow-xs">
                   ₹{item.price.toFixed(2)}
@@ -138,14 +170,13 @@ export function RateCardListSection({ onOrderNow, searchFilter = '' }: RateCardL
         )}
       </div>
 
-      {/* Prominent Section Order Now Button with clean responsive alignment */}
+      {/* Prominent Section Order Now Button */}
       <div className="mt-4 text-center">
         <button
           onClick={() => onOrderNow('Dry Cleaning — General Order', 'Dry Cleaning Rate Selection')}
-          className="w-full py-3.5 px-4 rounded-full bg-gradient-to-r from-[#008f51] to-[#05a862] hover:from-[#05a862] hover:to-[#008f51] text-white font-heading font-black text-xs sm:text-[13.5px] tracking-wide shadow-lg flex items-center justify-center gap-2 active:scale-98 transition-all"
+          className="group/btn relative overflow-hidden w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#005e34] via-[#009b56] to-[#014d2b] hover:from-[#004d2c] hover:via-[#008f51] hover:to-[#004225] text-white font-heading font-black text-xs sm:text-[13px] uppercase tracking-wider shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_16px_rgba(0,143,81,0.35)] hover:shadow-[0_6px_20px_rgba(0,143,81,0.45)] border border-[#34d399]/40 flex items-center justify-center gap-2 active:scale-98 transition-all before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700"
         >
-          <Sparkles className="w-4 h-4 text-[#ffe57f] shrink-0" />
-          <span className="truncate">ORDER NOW &bull; SCHEDULE FREE PICKUP &rarr;</span>
+          <span className="truncate relative z-10 font-black">ORDER NOW &bull; SCHEDULE FREE PICKUP &rarr;</span>
         </button>
       </div>
 

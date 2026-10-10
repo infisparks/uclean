@@ -66,6 +66,9 @@ export default function Home() {
       <ChooseServiceHorizontal
         onSelectService={(srv, garment) => handleOpenOrderForm(srv, garment)}
         onCheckGarmentPrice={handleScrollToRateCard}
+        onSearch={(q) => {
+          setSearchQuery(q);
+        }}
       />
 
       {/* 3. Third Section: Clean Rate Card List with Prominent ORDER NOW Button (Matching Screenshot 3) */}

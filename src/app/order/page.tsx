@@ -11,7 +11,6 @@ import {
   Phone,
   Send,
   ShieldCheck,
-  Sparkles,
   Truck,
   Check,
   User,
@@ -19,17 +18,18 @@ import {
   Calendar,
   FileText,
   Copy,
+  Search,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
 
 const AVAILABLE_SERVICES = [
-  { id: 'Wash & Fold — ₹109/kg', name: 'Wash & Fold', icon: '🧺', rate: '₹109/kg' },
-  { id: 'Wash & Iron — ₹149/kg', name: 'Wash & Iron', icon: '👔', rate: '₹149/kg' },
-  { id: 'Dry Cleaning — from ₹149', name: 'Dry Cleaning', icon: '🧥', rate: 'From ₹149' },
-  { id: 'Home Textiles & Sofa Cleaning', name: 'Sofa & Carpet', icon: '🛋️', rate: 'From ₹30/sq.ft' },
-  { id: 'Lining Curtain — ₹45/sq. ft.', name: 'Curtains (Parda)', icon: '🪟', rate: '₹45/sq.ft' },
-  { id: 'Shoe Spa & Cleaning', name: 'Shoe Spa Care', icon: '👟', rate: 'Buy 2 Get 1' },
+  { id: 'Wash & Fold — ₹109/kg', name: 'Wash & Fold', icon: '🧺', rate: '₹109/kg', keywords: 'wash fold laundry kg everyday clothes' },
+  { id: 'Wash & Iron — ₹149/kg', name: 'Wash & Iron', icon: '👔', rate: '₹149/kg', keywords: 'wash iron steam pressed laundry kg' },
+  { id: 'Dry Cleaning — from ₹149', name: 'Dry Cleaning & Suits', icon: '🧥', rate: 'From ₹149', keywords: 'dry clean suit blazer coat sherwani kurta saree lehenga jacket' },
+  { id: 'Home Textiles & Sofa Cleaning', name: 'Sofa & Carpet Care', icon: '🛋️', rate: 'From ₹30/sq.ft', keywords: 'sofa couch carpet upholstery shampoo' },
+  { id: 'Lining Curtain — ₹45/sq. ft.', name: 'Curtains (Parda)', icon: '🪟', rate: '₹45/sq.ft', keywords: 'curtain parda drape window door' },
+  { id: 'Shoe Spa & Cleaning', name: 'Shoe Spa & Leather', icon: '👟', rate: 'Buy 2 Get 1', keywords: 'shoe sneakers boots leather footwear spa' },
 ];
 
 function OrderFormContent() {
@@ -40,6 +40,7 @@ function OrderFormContent() {
   const urlGarment = searchParams.get('garment');
 
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [serviceSearch, setServiceSearch] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('400706');
@@ -54,6 +55,17 @@ function OrderFormContent() {
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+
+  const filteredAvailableServices = React.useMemo(() => {
+    const raw = serviceSearch.toLowerCase().trim();
+    if (!raw) return AVAILABLE_SERVICES;
+    return AVAILABLE_SERVICES.filter(
+      (srv) =>
+        srv.name.toLowerCase().includes(raw) ||
+        srv.rate.toLowerCase().includes(raw) ||
+        (srv.keywords && srv.keywords.toLowerCase().includes(raw))
+    );
+  }, [serviceSearch]);
 
   useEffect(() => {
     if (urlService) {
@@ -284,18 +296,18 @@ function OrderFormContent() {
                 Choose services and share your address. Our pickup associate will arrive with sanitized bags and a digital weighing scale.
               </p>
 
-              {/* 3 Executive Trust Pill Badges */}
-              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#F3F4F6] text-center text-[10px] text-[#374151] font-semibold">
-                <div className="flex items-center justify-center gap-1.5 bg-[#FAF6EE]/80 py-1.5 px-2 rounded-xl border border-[#ECE0C6]">
-                  <Truck className="w-3.5 h-3.5 text-[#008f51] shrink-0" />
+              {/* 3 Executive Trust Pill Badges - Highly Highlighted with Color Gradients */}
+              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#F3F4F6] text-center text-[10.5px] font-black">
+                <div className="flex items-center justify-center gap-1.5 bg-gradient-to-br from-[#eaf9f1] via-[#d1fae5] to-[#a7f3d0]/60 py-2 px-2 rounded-xl border border-[#008f51]/40 shadow-xs text-[#072618]">
+                  <Truck className="w-4 h-4 text-[#008f51] shrink-0 drop-shadow-xs" />
                   <span>Free Pickup</span>
                 </div>
-                <div className="flex items-center justify-center gap-1.5 bg-[#FAF6EE]/80 py-1.5 px-2 rounded-xl border border-[#ECE0C6]">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#008f51] shrink-0" />
+                <div className="flex items-center justify-center gap-1.5 bg-gradient-to-br from-[#eff6ff] via-[#dbeafe] to-[#bfdbfe]/60 py-2 px-2 rounded-xl border border-[#3b82f6]/40 shadow-xs text-[#072618]">
+                  <ShieldCheck className="w-4 h-4 text-[#2563eb] shrink-0 drop-shadow-xs" />
                   <span>Fabric Safety</span>
                 </div>
-                <div className="flex items-center justify-center gap-1.5 bg-[#FAF6EE]/80 py-1.5 px-2 rounded-xl border border-[#ECE0C6]">
-                  <Clock className="w-3.5 h-3.5 text-[#008f51] shrink-0" />
+                <div className="flex items-center justify-center gap-1.5 bg-gradient-to-br from-[#fffbeb] via-[#fef3c7] to-[#fde68a]/60 py-2 px-2 rounded-xl border border-[#f59e0b]/40 shadow-xs text-[#072618]">
+                  <Clock className="w-4 h-4 text-[#d97706] shrink-0 drop-shadow-xs" />
                   <span>24-48h Delivery</span>
                 </div>
               </div>
@@ -303,24 +315,46 @@ function OrderFormContent() {
 
             <form onSubmit={handleFormSubmit} className="space-y-3">
               
-              {/* Step 1: Services Selection (2 Columns on Mobile with High Polish) */}
-              <div className="bg-white rounded-[22px] border border-[#DECBB0] p-4 sm:p-5 shadow-2xs space-y-2.5">
+              {/* Step 1: Services Selection with Search Bar & Color Gradients */}
+              <div className="bg-white rounded-[22px] border border-[#DECBB0] p-4 sm:p-5 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#008f51] text-white text-[10px] font-black flex items-center justify-center">
+                    <span className="w-5 h-5 rounded-full bg-gradient-to-br from-[#008f51] to-[#05a862] text-white text-[10.5px] font-black flex items-center justify-center shadow-xs">
                       1
                     </span>
-                    <span className="text-[13px] font-bold text-[#111827]">
+                    <span className="text-[13.5px] font-black text-[#072618]">
                       Choose Service(s) <span className="text-red-500">*</span>
                     </span>
                   </div>
-                  <span className="text-[10px] font-bold text-[#008f51] bg-[#eaf8f1] px-2 py-0.5 rounded-full border border-[#a7f3d0]">
+                  <span className="text-[10px] font-extrabold text-[#008f51] bg-gradient-to-r from-[#eaf9f1] to-[#d1fae5] px-2.5 py-0.5 rounded-full border border-[#a7f3d0] shadow-2xs">
                     {selectedServices.length} selected
                   </span>
                 </div>
 
+                {/* Search Bar inside Form Step 1 */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-[#008f51]" />
+                  <input
+                    type="text"
+                    placeholder="Search service or garment (e.g. Wash, Suit, Saree, Shoes)..."
+                    value={serviceSearch}
+                    onChange={(e) => setServiceSearch(e.target.value)}
+                    className="w-full h-8 pl-8 pr-3 bg-[#FAF6EE]/80 rounded-xl text-[11px] font-bold text-[#0c2b1e] border border-[#d4af37]/60 focus:outline-none focus:ring-1 focus:ring-[#008f51] placeholder:text-[#64748b]"
+                  />
+                  {serviceSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setServiceSearch('')}
+                      className="absolute right-2.5 top-2 text-xs font-bold text-gray-400 hover:text-gray-700"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Available Service Cards with Color Gradients */}
                 <div className="grid grid-cols-2 gap-2">
-                  {AVAILABLE_SERVICES.map((srv) => {
+                  {filteredAvailableServices.map((srv) => {
                     const isChecked = selectedServices.includes(srv.id);
                     return (
                       <label
@@ -328,14 +362,14 @@ function OrderFormContent() {
                         onClick={() => toggleService(srv.id)}
                         className={`relative flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
                           isChecked
-                            ? 'bg-[#eaf8f1]/70 border-[#008f51] ring-1.5 ring-[#008f51] shadow-2xs'
-                            : 'bg-[#FAF6EE]/60 border-[#DECBB0] hover:bg-[#FAF6EE] hover:border-[#008f51]/40'
+                            ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-1.5 ring-[#008f51] shadow-xs'
+                            : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
                         }`}
                       >
                         <div className="min-w-0 pr-1 flex items-center gap-1.5">
-                          <span className="text-sm shrink-0">{srv.icon}</span>
+                          <span className="text-base shrink-0">{srv.icon}</span>
                           <div className="min-w-0">
-                            <span className="block text-[11px] sm:text-[12px] font-bold text-[#111827] truncate leading-tight">
+                            <span className="block text-[11.5px] sm:text-[12.5px] font-black text-[#072618] truncate leading-tight">
                               {srv.name}
                             </span>
                             <span className="text-[10px] font-extrabold text-[#00874c]">
@@ -347,7 +381,7 @@ function OrderFormContent() {
                         <div
                           className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-all ${
                             isChecked
-                              ? 'bg-[#008f51] border-[#008f51] text-white shadow-xs'
+                              ? 'bg-gradient-to-br from-[#008f51] to-[#05a862] border-[#008f51] text-white shadow-xs'
                               : 'bg-white border-[#DECBB0]'
                           }`}
                         >
@@ -360,9 +394,9 @@ function OrderFormContent() {
 
                 {/* Preselected Custom Plan Banner if from URL */}
                 {selectedServices.some((s) => !AVAILABLE_SERVICES.some((a) => a.id === s)) && (
-                  <div className="bg-[#eaf8f1] border border-[#a7f3d0] rounded-xl p-2.5 text-[11.5px] text-[#072618] flex items-center justify-between">
-                    <span>Selected Plan: <strong>{selectedServices.find((s) => !AVAILABLE_SERVICES.some((a) => a.id === s))}</strong></span>
-                    <span className="text-[10px] font-bold text-[#008f51]">Configured</span>
+                  <div className="bg-gradient-to-r from-[#eaf9f1] via-[#d1fae5] to-[#eaf9f1] border border-[#a7f3d0] rounded-xl p-2.5 text-[11.5px] text-[#072618] flex items-center justify-between shadow-2xs">
+                    <span className="truncate">Selected Plan: <strong className="text-[#008f51] font-black">{selectedServices.find((s) => !AVAILABLE_SERVICES.some((a) => a.id === s))}</strong></span>
+                    <span className="text-[10px] font-black text-[#008f51] bg-white px-2 py-0.5 rounded-md border border-[#a7f3d0] shrink-0 ml-1">Configured</span>
                   </div>
                 )}
               </div>
@@ -610,15 +644,12 @@ function OrderFormContent() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#008f51] to-[#05a862] hover:from-[#05a862] hover:to-[#072618] text-white font-bold text-[13px] tracking-wide shadow-md hover:shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+                  className="group/btn relative overflow-hidden w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#005e34] via-[#009b56] to-[#014d2b] hover:from-[#004d2c] hover:via-[#008f51] hover:to-[#004225] text-white font-heading font-black text-[12.5px] uppercase tracking-wider shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_16px_rgba(0,143,81,0.35)] hover:shadow-[0_6px_20px_rgba(0,143,81,0.45)] border border-[#34d399]/40 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700"
                 >
                   {loading ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin relative z-10" />
                   ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5 text-[#ffe57f]" />
-                      <span>CONFIRM &amp; BOOK DOORSTEP PICKUP &rarr;</span>
-                    </>
+                    <span className="relative z-10 font-black">CONFIRM &amp; BOOK DOORSTEP PICKUP &rarr;</span>
                   )}
                 </button>
 

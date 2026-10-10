@@ -63,8 +63,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`}>
-      <body className="antialiased bg-[#0b1a13] text-[#0c2b1e] min-h-screen flex justify-center">
+    <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`} suppressHydrationWarning>
+      <body className="antialiased bg-[#0b1a13] text-[#0c2b1e] min-h-screen flex justify-center" suppressHydrationWarning>
         {children}
       </body>
     </html>

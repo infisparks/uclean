@@ -232,8 +232,7 @@ export function InteractiveServiceSelector({
               : 'bg-white text-[#0c2b1e] border border-[#d7e0d7] hover:bg-[#FAF6EE]'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#ffe57f]" />
-          <span>✨ Premium Care</span>
+          <span>Premium Care</span>
         </button>
       </div>
 

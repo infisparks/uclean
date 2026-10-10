@@ -88,6 +88,50 @@ h1, h2, h3, h4, .font-heading {
   }
 }
 
+@keyframes textGradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-text-flow-green {
+  background: linear-gradient(
+    90deg,
+    #008f51 0%,
+    #05c06e 25%,
+    #d4af37 50%,
+    #00b05b 75%,
+    #008f51 100%
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textGradientFlow 4s ease-in-out infinite;
+}
+
+.animate-text-flow-dark {
+  background: linear-gradient(
+    90deg,
+    #022a1c 0%,
+    #084931 25%,
+    #0c6142 50%,
+    #084931 75%,
+    #022a1c 100%
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textGradientFlow 5s ease-in-out infinite;
+}
+
 .btn-explore-wrap {
   position: relative;
   width: 92%;

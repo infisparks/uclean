@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Star, Zap, SlidersHorizontal, Check } from 'lucide-react';
+import { Star, Zap, SlidersHorizontal, Check, Sparkles } from 'lucide-react';
 
 export interface ProductCardItem {
   id: string;
@@ -226,10 +226,9 @@ export function ProductCardGrid({ onSelectProduct }: ProductCardGridProps) {
                   <button
                     type="button"
                     onClick={() => onSelectProduct(prod)}
-                    className="h-8 rounded-lg bg-gradient-to-r from-[#d4af37] to-[#eab308] hover:from-[#eab308] hover:to-[#d4af37] text-[#3d2303] text-[10.5px] font-black flex items-center justify-center gap-0.5 shadow-sm active:scale-95 transition-all"
+                    className="group/btn relative overflow-hidden h-8 rounded-lg bg-gradient-to-r from-[#005e34] via-[#009b56] to-[#014d2b] hover:from-[#004d2c] hover:via-[#008f51] hover:to-[#004225] text-white text-[10.5px] font-black flex items-center justify-center gap-1 border border-[#34d399]/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_2px_8px_rgba(0,143,81,0.25)] active:scale-95 transition-all before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/30 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700"
                   >
-                    <Zap className="w-3 h-3 fill-current" />
-                    <span>Book Now</span>
+                    <span className="relative z-10">Book Now</span>
                   </button>
                 </div>
               </div>

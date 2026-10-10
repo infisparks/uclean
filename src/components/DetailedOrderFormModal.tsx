@@ -402,10 +402,7 @@ export function DetailedOrderFormModal({
                 {loading ? (
                   <span>Recording in Firebase...</span>
                 ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-[#ffe57f]" />
-                    <span>SUBMIT ORDER REQUEST &rarr;</span>
-                  </>
+                  <span>SUBMIT ORDER REQUEST &rarr;</span>
                 )}
               </button>
 

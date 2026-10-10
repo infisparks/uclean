@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, CheckCircle, Calendar, Clock, MapPin, Phone, User, Sparkles, Send } from 'lucide-react';
+import { X, CheckCircle, Calendar, Clock, MapPin, Phone, User, Send } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
 
@@ -9,7 +9,7 @@ interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultService?: 'pickup' | 'home-visit' | 'vip-membership' | 'general-inquiry';
-  defaultTier?: 'Silver (₹5,000 )' | 'Gold (₹7,000)' | 'Platinum (₹10,000)';
+  defaultTier?: 'Silver (₹5,000)' | 'Gold (₹7,000)' | 'Platinum (₹10,000)';
   prefilledItems?: { name: string; quantity: number; price: number }[];
   totalEstimate?: number;
 }
@@ -344,10 +344,7 @@ export function BookingModal({
                 {loading ? (
                   <span>Recording in Firebase...</span>
                 ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-[#ffe57f]" />
-                    <span>Confirm Booking &amp; Free Pickup</span>
-                  </>
+                  <span>Confirm Booking &amp; Free Pickup</span>
                 )}
               </button>
             </form>

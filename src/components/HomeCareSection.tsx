@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 interface HomeCareSectionProps {
   onOpenBooking: (service: 'home-visit') => void;
@@ -98,7 +98,6 @@ export function HomeCareSection({ onOpenBooking }: HomeCareSectionProps) {
           onClick={() => onOpenBooking('home-visit')}
           className="inline-flex items-center justify-center gap-2 bg-[#082d1c] hover:bg-[#008f51] text-white py-2.5 px-6 rounded-full font-heading font-black text-xs shadow-md active:scale-95 transition-all"
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#ffe57f]" />
           <span>Book Home Visit / Inspection</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>

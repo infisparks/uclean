@@ -1,114 +1,121 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search, Sparkles, Truck, ShieldCheck, Clock } from 'lucide-react';
+import React from 'react';
 
 interface CompactHeroProps {
-  onSearch: (query: string) => void;
-  onExplore: () => void;
+  onSearch?: (query: string) => void;
+  onExplore?: () => void;
 }
 
 export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
-  const [query, setQuery] = useState('');
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim()) {
-      onSearch(query.trim());
-      const el = document.getElementById('rate-list-section');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   return (
     <header
-      className="relative w-full aspect-square bg-cover bg-center bg-no-repeat p-4 flex flex-col justify-between overflow-hidden border-b-2 border-[#008f51] shadow-2xl"
+      className="relative w-full aspect-square bg-cover bg-no-repeat px-3 pt-2 sm:pt-3 pb-3 flex flex-col justify-start overflow-hidden border-b border-[#008f51]/30 shadow-2xl"
       style={{
-        backgroundImage: "url('/images/hero-banner.jpg')",
+        backgroundImage: "url('/images/hero-clean-bg.jpg')",
+        backgroundPosition: 'center 42%',
       }}
       id="hero"
     >
-      {/* Rich Emerald & Gold atmospheric overlay with deep vignette */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#072618]/92 via-[#072618]/65 to-[#072618]/95 pointer-events-none" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_0%,_rgba(7,38,24,0.7)_100%)] pointer-events-none" />
+      {/* Subtle top daylight gradient to ensure text readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-transparent pointer-events-none" />
 
-      {/* TOP: Brand Bar */}
-      <div className="relative z-10 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-[#008f51] to-[#05a862] rounded-xl flex items-center justify-center shadow-lg border border-[#ffe57f]/50">
-            <span className="font-heading text-xl font-black text-white leading-none">U</span>
+      {/* TOP: Pure Brand Header & Headline */}
+      <div className="relative z-10 flex flex-col items-center text-center pt-0">
+        {/* 1. Logo matching Reference: Green Squircle + Solid Green CLEAN */}
+        <div className="inline-flex items-center gap-1.5">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-[#008f51] rounded-xl flex items-center justify-center shadow-md border border-white/60">
+            <span className="font-heading text-sm sm:text-base font-black text-white leading-none">U</span>
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-heading text-xl font-black text-white tracking-wider leading-none drop-shadow-md">
-                UCLEAN
-              </span>
-              <span className="text-[9px] font-black text-[#ffe57f] bg-[#632608]/90 px-2 py-0.5 rounded-full border border-[#d4af37]/60 uppercase shadow-sm">
-                NERUL
-              </span>
-            </div>
-            <div className="flex items-center gap-1 font-heading text-[8px] font-extrabold tracking-[1.4px] text-[#a8dec4] mt-0.5 uppercase">
-              <span>WE</span>
-              <svg className="w-[8px] h-[8px] fill-[#55fca7]" viewBox="0 0 24 24">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-              </svg>
-              <span>LAUNDRY</span>
-            </div>
-          </div>
+          <span
+            className="font-heading text-xl sm:text-2xl font-black tracking-wide leading-none text-[#008f51]"
+            style={{
+              filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.9))',
+            }}
+          >
+            CLEAN
+          </span>
         </div>
 
-        <a
-          href="tel:+917400474132"
-          className="bg-gradient-to-r from-[#008f51] to-[#05a862] hover:from-[#05a862] hover:to-[#008f51] text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg border border-[#ffe57f]/40 uppercase tracking-tight flex items-center gap-1.5 active:scale-95 transition-all"
+        {/* 2. WE ❤ LAUNDRY */}
+        <div
+          className="flex items-center gap-1 font-heading text-[8.5px] sm:text-[9.5px] font-black tracking-[2px] text-[#052818] mt-0.5 uppercase"
+          style={{
+            textShadow: '0 1px 1px rgba(255,255,255,0.9)',
+          }}
         >
-          <Truck className="w-3.5 h-3.5 text-[#ffe57f]" />
-          <span>Free Pickup</span>
-        </a>
-      </div>
-
-      {/* Main Center Content */}
-      <div className="relative z-10 text-center my-auto px-2">
-        <div className="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest text-[#ffe57f] bg-black/50 px-3.5 py-1 rounded-full border border-[#d4af37]/60 mb-2 uppercase backdrop-blur-md shadow-md">
-          <Sparkles className="w-3.5 h-3.5 text-[#ffe57f]" />
-          <span>Premium Boutique Quality</span>
+          <span>WE</span>
+          <svg className="w-2.5 h-2.5 fill-[#008f51]" viewBox="0 0 24 24">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+          <span>LAUNDRY</span>
         </div>
 
-        <h1 className="font-heading text-[30px] sm:text-[34px] font-black leading-[1.12] tracking-tight text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.9)]">
-          Professional Laundry &amp;{' '}
-          <span className="text-[#55fca7] relative inline-block">
+        {/* 3. CLEANER CLOTHES • BRIGHTER YOU */}
+        <div
+          className="text-[7.5px] sm:text-[8px] font-black tracking-[1.6px] text-[#052818] mt-0.5 uppercase"
+          style={{
+            textShadow: '0 1px 1px rgba(255,255,255,0.9)',
+          }}
+        >
+          CLEANER CLOTHES &bull; BRIGHTER YOU
+        </div>
+
+        {/* 4. MAIN HEADLINE - 1:1 Matching Reference Screenshot with White Border and Green Arc */}
+        <h1 className="font-heading flex flex-col items-center mt-1 sm:mt-1.5 select-none">
+          {/* Line 1: Professional Laundry & (Forest Green with Crisp White Outline) */}
+          <span
+            className="text-[26px] sm:text-[33px] md:text-[37px] font-black tracking-tight leading-[1.05] text-[#042817]"
+            style={{
+              WebkitTextStroke: '1.2px #ffffff',
+              paintOrder: 'stroke fill',
+              textShadow:
+                '-1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff, 0 2px 4px rgba(0,20,10,0.2)',
+            }}
+          >
+            Professional Laundry &amp;
+          </span>
+
+          {/* Line 2: Dry Cleaning (Solid Emerald Green with Green Arc Underline) */}
+          <span
+            className="relative inline-block text-[31px] sm:text-[38px] md:text-[43px] font-black tracking-tight leading-[1.05] text-[#008f51] my-0.5"
+            style={{
+              WebkitTextStroke: '1.2px #ffffff',
+              paintOrder: 'stroke fill',
+              textShadow:
+                '-1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff, 0 2px 4px rgba(0,20,10,0.2)',
+            }}
+          >
             Dry Cleaning
-            <svg className="absolute left-0 -bottom-1 w-full h-[7px] pointer-events-none" viewBox="0 0 260 20" fill="none">
-              <path d="M6 15C75 4 185 4 254 15" stroke="#55fca7" strokeWidth="4" strokeLinecap="round" />
+            {/* Green Arc Swoosh Underline matching screenshot */}
+            <svg
+              className="absolute left-0 right-0 -bottom-1.5 w-full h-3 text-[#008f51] pointer-events-none"
+              viewBox="0 0 200 12"
+              fill="none"
+              preserveAspectRatio="none"
+            >
+              <path
+                d="M 4,3 Q 100,11 196,3"
+                stroke="#008f51"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
             </svg>
           </span>
-        </h1>
 
-        <p className="text-[14px] sm:text-[15px] font-semibold text-[#e1faee] mt-2.5 max-w-[360px] mx-auto drop-shadow-md leading-relaxed">
-          Doorstep pickup in Sector 6 &amp; Nerul &bull; 24&ndash;48 Hr express delivery
-        </p>
-      </div>
-
-      {/* Bottom Search Bar */}
-      <div className="relative z-10 space-y-2 pt-1">
-        <form onSubmit={handleSearchSubmit} className="relative w-full max-w-[400px] mx-auto">
-          <Search className="absolute left-3.5 top-3 w-4 h-4 text-[#008f51]" strokeWidth={2.5} />
-          <input
-            type="text"
-            placeholder="Search dry cleaning (e.g. Blazer, Suit, Dress)..."
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              onSearch(e.target.value);
+          {/* Line 3: Services (Forest Green with Crisp White Outline) */}
+          <span
+            className="text-[26px] sm:text-[33px] md:text-[37px] font-black tracking-tight leading-[1.05] text-[#042817]"
+            style={{
+              WebkitTextStroke: '1.2px #ffffff',
+              paintOrder: 'stroke fill',
+              textShadow:
+                '-1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff, 0 2px 4px rgba(0,20,10,0.2)',
             }}
-            className="w-full h-11 pl-10 pr-24 bg-white/95 backdrop-blur-md rounded-full text-xs font-bold text-[#0c2b1e] border-2 border-[#d4af37] shadow-2xl focus:outline-none focus:ring-2 focus:ring-[#008f51]"
-          />
-          <button
-            type="submit"
-            className="absolute right-1.5 top-1.5 h-8 px-4 rounded-full bg-gradient-to-r from-[#008f51] to-[#05a862] hover:from-[#05a862] hover:to-[#008f51] text-white text-[11px] font-black shadow-md active:scale-95 transition-all flex items-center gap-1"
           >
-            <span>Search</span>
-          </button>
-        </form>
+            Services
+          </span>
+        </h1>
       </div>
     </header>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 interface MembershipCardsProps {
   onClaimMembership: (tier: 'Silver (₹5,000)' | 'Gold (₹7,000)' | 'Platinum (₹10,000)') => void;
@@ -131,7 +131,6 @@ export function MembershipCards({ onClaimMembership }: MembershipCardsProps) {
               onClick={() => onClaimMembership('Silver (₹5,000)')}
               className="w-full h-12 rounded-full bg-[#0f291e] hover:bg-[#072618] text-white font-extrabold text-[13px] sm:text-[14px] shadow-lg flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-all"
             >
-              <Sparkles className="w-4 h-4 text-[#55fca7] shrink-0" />
               <span>Claim Silver VIP &bull; ₹5,000</span>
             </button>
           </div>
@@ -197,7 +196,6 @@ export function MembershipCards({ onClaimMembership }: MembershipCardsProps) {
               onClick={() => onClaimMembership('Gold (₹7,000)')}
               className="w-full h-12 rounded-full bg-[#632608] hover:bg-[#4a1c06] text-white font-extrabold text-[13px] sm:text-[14px] shadow-lg flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-all"
             >
-              <Sparkles className="w-4 h-4 text-[#ffe57f] shrink-0" />
               <span>Claim Gold VIP &bull; ₹7,000</span>
             </button>
           </div>
@@ -264,7 +262,6 @@ export function MembershipCards({ onClaimMembership }: MembershipCardsProps) {
               onClick={() => onClaimMembership('Platinum (₹10,000)')}
               className="w-full h-12 rounded-full bg-gradient-to-r from-[#ffd700] to-[#d4af37] text-[#0f172a] font-extrabold text-[13px] sm:text-[14px] shadow-lg flex items-center justify-center gap-2 hover:scale-[1.02] transition-all"
             >
-              <Sparkles className="w-4 h-4 text-[#0f172a] shrink-0" />
               <span>Claim Platinum VIP &bull; ₹10,000</span>
             </button>
           </div>
