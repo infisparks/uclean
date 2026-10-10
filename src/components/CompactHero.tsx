@@ -76,7 +76,7 @@ export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
             Professional Laundry &amp;
           </span>
 
-          {/* Line 2: Dry Cleaning (Solid Emerald Green with Green Arc Underline) */}
+          {/* Line 2: Dry Cleaning (Solid Emerald Green, Underline Removed) */}
           <span
             className="relative inline-block text-[31px] sm:text-[38px] md:text-[43px] font-black tracking-tight leading-[1.05] text-[#008f51] my-0.5"
             style={{
@@ -87,20 +87,6 @@ export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
             }}
           >
             Dry Cleaning
-            {/* Green Arc Swoosh Underline matching screenshot */}
-            <svg
-              className="absolute left-0 right-0 -bottom-1.5 w-full h-3 text-[#008f51] pointer-events-none"
-              viewBox="0 0 200 12"
-              fill="none"
-              preserveAspectRatio="none"
-            >
-              <path
-                d="M 4,3 Q 100,11 196,3"
-                stroke="#008f51"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-              />
-            </svg>
           </span>
 
           {/* Line 3: Services (Forest Green with Crisp White Outline) */}

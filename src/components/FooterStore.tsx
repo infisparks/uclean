@@ -72,7 +72,7 @@ export function FooterStore() {
           className="flex-1 flex items-center justify-center gap-2 p-3 rounded-full bg-white text-[#072618] font-bold text-[13px] shadow-lg hover:bg-[#f0fdf4] hover:-translate-y-0.5 transition-all"
         >
           <Phone className="w-4 h-4 text-[#008f51]" />
-          <span>7400474132</span>
+          <span>+91 74004 74132</span>
         </button>
 
         <button
@@ -87,9 +87,9 @@ export function FooterStore() {
       </div>
 
       {/* Footer Bottom */}
-      <div className="text-[11px] text-[#87b8a1] leading-relaxed max-w-[320px] border-t border-white/10 pt-4 w-full">
-        &copy; 2026 U CLEAN WE ♥ LAUNDRY. All rights reserved.<br />
-        Free Pickup &amp; Delivery across Sector 6 &amp; Nerul.
+      <div className="text-[11px] text-[#87b8a1] leading-relaxed max-w-[320px] border-t border-white/10 pt-4 w-full flex flex-col items-center gap-1">
+        <span>&copy; 2026 U CLEAN WE ♥ LAUNDRY. All rights reserved.</span>
+        <span>Free Pickup &amp; Delivery across Sector 6 &amp; Nerul.</span>
       </div>
     </footer>
   );

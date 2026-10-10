@@ -14,7 +14,6 @@ import {
   ChevronRight,
   TrendingUp,
   AlertCircle,
-  Sparkles,
   Send,
   UserCheck,
   Truck,

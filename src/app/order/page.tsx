@@ -192,10 +192,10 @@ function OrderFormContent() {
         {/* Store Dial */}
         <a
           href="tel:+917400474132"
-          className="flex items-center gap-1 text-[11px] font-bold text-[#008f51] bg-[#eaf8f1] border border-[#a7f3d0] px-3 py-1 rounded-full hover:bg-[#008f51] hover:text-white transition-all active:scale-95 shadow-2xs"
+          className="flex items-center gap-1.5 text-[11px] font-bold text-[#008f51] bg-[#eaf8f1] border border-[#a7f3d0] px-3 py-1 rounded-full hover:bg-[#008f51] hover:text-white transition-all active:scale-95 shadow-2xs"
         >
           <Phone className="w-3 h-3" />
-          <span>Hotline</span>
+          <span>+91 74004 74132</span>
         </a>
       </header>
 
@@ -315,41 +315,51 @@ function OrderFormContent() {
 
             <form onSubmit={handleFormSubmit} className="space-y-3">
               
-              {/* Step 1: Services Selection with Search Bar & Color Gradients */}
-              <div className="bg-white rounded-[22px] border border-[#DECBB0] p-4 sm:p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
+              {/* Step 1: Services Selection with Glowing Search Bar & Highlight Animation */}
+              <div className="bg-white rounded-[22px] border-2 border-[#a7f3d0]/80 p-4 sm:p-5 shadow-[0_4px_20px_rgba(0,143,81,0.08)] space-y-3 relative overflow-hidden">
+                {/* Subtle top emerald highlight line */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#008f51] via-[#34d399] to-[#008f51] animate-pulse" />
+
+                <div className="flex items-center justify-between pt-0.5">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-gradient-to-br from-[#008f51] to-[#05a862] text-white text-[10.5px] font-black flex items-center justify-center shadow-xs">
-                      1
+                    <span className="relative flex h-6 w-6">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#008f51] opacity-30"></span>
+                      <span className="relative inline-flex rounded-full h-6 w-6 bg-gradient-to-br from-[#00b05b] to-[#007a3e] text-white text-[11px] font-black items-center justify-center shadow-md border border-white/60">
+                        1
+                      </span>
                     </span>
-                    <span className="text-[13.5px] font-black text-[#072618]">
-                      Choose Service(s) <span className="text-red-500">*</span>
+                    <span className="text-[14px] sm:text-[15px] font-heading font-black text-[#072618] tracking-tight">
+                      Choose Service(s) <span className="text-red-500 animate-pulse">*</span>
                     </span>
                   </div>
-                  <span className="text-[10px] font-extrabold text-[#008f51] bg-gradient-to-r from-[#eaf9f1] to-[#d1fae5] px-2.5 py-0.5 rounded-full border border-[#a7f3d0] shadow-2xs">
-                    {selectedServices.length} selected
+                  
+                  <span className="text-[10.5px] font-black text-[#006e3e] bg-gradient-to-r from-[#d1fae5] via-[#a7f3d0] to-[#d1fae5] px-3 py-1 rounded-full border border-[#34d399] shadow-xs animate-in fade-in transition-all">
+                    ✓ {selectedServices.length} selected
                   </span>
                 </div>
 
-                {/* Search Bar inside Form Step 1 */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-[#008f51]" />
-                  <input
-                    type="text"
-                    placeholder="Search service or garment (e.g. Wash, Suit, Saree, Shoes)..."
-                    value={serviceSearch}
-                    onChange={(e) => setServiceSearch(e.target.value)}
-                    className="w-full h-8 pl-8 pr-3 bg-[#FAF6EE]/80 rounded-xl text-[11px] font-bold text-[#0c2b1e] border border-[#d4af37]/60 focus:outline-none focus:ring-1 focus:ring-[#008f51] placeholder:text-[#64748b]"
-                  />
-                  {serviceSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setServiceSearch('')}
-                      className="absolute right-2.5 top-2 text-xs font-bold text-gray-400 hover:text-gray-700"
-                    >
-                      ✕
-                    </button>
-                  )}
+                {/* Glowing Animated Search Bar inside Form Step 1 */}
+                <div className="relative group/search">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-[#008f51] via-[#34d399] to-[#d4af37] rounded-2xl blur-xs opacity-40 group-hover/search:opacity-75 group-focus-within/search:opacity-100 transition duration-500" />
+                  <div className="relative flex items-center bg-white rounded-xl border border-[#34d399]/70 shadow-inner">
+                    <Search className="absolute left-3 w-4 h-4 text-[#008f51] shrink-0 animate-pulse" />
+                    <input
+                      type="text"
+                      placeholder="Search service or garment (e.g. Wash, Suit, Saree, Shoes)..."
+                      value={serviceSearch}
+                      onChange={(e) => setServiceSearch(e.target.value)}
+                      className="w-full h-9 sm:h-10 pl-9 pr-8 bg-transparent text-[12px] font-extrabold text-[#072618] placeholder:text-[#64748b] placeholder:font-medium focus:outline-none"
+                    />
+                    {serviceSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setServiceSearch('')}
+                        className="absolute right-2.5 text-xs font-black text-gray-400 hover:text-gray-700 w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Available Service Cards with Color Gradients */}
