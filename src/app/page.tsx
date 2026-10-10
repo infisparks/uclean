@@ -12,6 +12,8 @@ import { FooterStore } from '@/components/FooterStore';
 import { CrmPortal } from '@/components/CrmPortal';
 import { useRouter } from 'next/navigation';
 
+
+
 export default function Home() {
   const router = useRouter();
   const [viewMode, setViewMode] = useState<'store' | 'crm'>('store');
