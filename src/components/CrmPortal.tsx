@@ -1,23 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import {
-  Package,
-  Phone,
-  Clock,
-  MapPin,
-  Search,
-  Filter,
-  CheckCircle,
-  Plus,
-  Printer,
-  ChevronRight,
-  TrendingUp,
-  AlertCircle,
-  Send,
-  UserCheck,
-  Truck,
-} from 'lucide-react';
 
 export interface CrmOrder {
   id: string;
@@ -42,513 +25,978 @@ export interface CrmOrder {
     | 'Delivered'
     | 'Cancelled';
   notes: string;
-  createdAt?: string;
 }
 
-const INITIAL_DEMO_ORDERS: CrmOrder[] = [
+const INITIAL_ORDERS: CrmOrder[] = [
   {
     id: 'UC-26091',
     name: 'Ayesha Shaikh',
-    phone: '+91 98204 77121',
+    phone: '98XXXXXX21',
     service: 'Wash & Iron',
-    qty: '3.5 kg (estimate)',
-    total: '₹521 est.',
-    address: 'Flat 402, Sea View Heights, Sector 6, Nerul West',
-    slot: 'Today · Afternoon (12-4 PM)',
+    qty: '3 kg (estimate)',
+    total: '₹447 est.',
+    address: 'Sample address, Sector 6, Nerul West',
+    slot: 'Today · Afternoon',
     status: 'New Request',
-    notes: 'Call before arriving. Ring flat bell twice.',
+    notes: 'Call before pickup',
   },
   {
     id: 'UC-26090',
     name: 'Rahul Mehta',
-    phone: '+91 98191 43234',
-    service: 'Dry Cleaning (Suits)',
-    qty: '2 garments (3-pc suit + blazer)',
-    total: '₹1,248 est.',
-    address: 'B-12, Palm Beach Residency, Nerul',
-    slot: 'Today · Evening (4-9 PM)',
+    phone: '98XXXXXX34',
+    service: 'Dry Cleaning',
+    qty: '2 garments',
+    total: 'To confirm',
+    address: 'Sample address, Nerul West',
+    slot: 'Today · Evening',
     status: 'Call Confirmed',
-    notes: 'Urgent turnaround required by tomorrow evening.',
+    notes: 'Confirm garment-wise quote',
   },
   {
     id: 'UC-26089',
     name: 'Sana Khan',
-    phone: '+91 88790 12356',
+    phone: '88XXXXXX56',
     service: 'Wash & Fold',
-    qty: '4.2 kg (estimate)',
-    total: '₹457 est.',
-    address: 'Room 101, Om Sai Krupa, Sector 6',
-    slot: 'Today · Morning (8-12 PM)',
+    qty: '4 kg (estimate)',
+    total: '₹436 est.',
+    address: 'Sample address, Sector 6',
+    slot: 'Today · Morning',
     status: 'Pickup Assigned',
-    notes: 'Assigned to driver Ramesh.',
+    notes: 'Partner assigned',
   },
   {
     id: 'UC-26088',
     name: 'Vivek Patil',
-    phone: '+91 97022 55477',
-    service: 'Carpet & Sofa Shampoo',
-    qty: 'Approx. 35 sq. ft. + 3 seater',
-    total: '₹1,850 quotation',
-    address: 'Row House 4, Sector 6, Nerul West',
+    phone: '97XXXXXX77',
+    service: 'Carpet Cleaning',
+    qty: 'Approx. 35 sq. ft.',
+    total: 'To measure',
+    address: 'Sample address, Nerul West',
     slot: 'Tomorrow · Morning',
     status: 'Quotation Sent',
-    notes: 'Customer accepted estimate on WhatsApp.',
+    notes: 'Awaiting customer approval',
   },
   {
     id: 'UC-26087',
     name: 'Fatima Ali',
-    phone: '+91 91673 88990',
-    service: 'Bridal Lehenga Dry Clean',
-    qty: '1 set (heavy zari work)',
-    total: '₹1,499',
-    address: 'Plot 45, Near Meridian, Nerul West',
-    slot: 'Delivered',
+    phone: '91XXXXXX90',
+    service: 'Wash & Fold',
+    qty: '5 kg',
+    total: '₹545 est.',
+    address: 'Sample address, Nerul West',
+    slot: 'Completed',
     status: 'Delivered',
-    notes: 'Quality checked, customer loved packaging.',
+    notes: 'Feedback pending',
   },
 ];
 
-export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
-  const [orders, setOrders] = useState<CrmOrder[]>(INITIAL_DEMO_ORDERS);
-  const [selectedId, setSelectedId] = useState<string>(INITIAL_DEMO_ORDERS[0].id);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+const STATUS_LIST = [
+  'New Request',
+  'Call Confirmed',
+  'Pickup Assigned',
+  'Picked Up',
+  'At Store / Inspection',
+  'Quotation Sent',
+  'Cleaning In Progress',
+  'Quality Check',
+  'Ready for Delivery',
+  'Out for Delivery',
+  'Delivered',
+  'Cancelled',
+];
 
-  // Load any local storage submitted orders
+export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
+  const [orders, setOrders] = useState<CrmOrder[]>(INITIAL_ORDERS);
+  const [selectedId, setSelectedId] = useState<string>(INITIAL_ORDERS[0].id);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('All');
+  const [activeNav, setActiveNav] = useState('orders');
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [statusSelect, setStatusSelect] = useState<string>(INITIAL_ORDERS[0].status);
+
+  // Sync web bookings from localStorage if any exist
   useEffect(() => {
     try {
       const local = JSON.parse(localStorage.getItem('uclean_local_bookings') || '[]');
       if (Array.isArray(local) && local.length > 0) {
         const mapped: CrmOrder[] = local.map((b: any, idx: number) => ({
-          id: b.id || `UC-${26100 + idx}`,
-          name: b.customerName || 'Customer',
-          phone: b.phone || '98XXXXXX',
-          service: b.serviceType || 'Pickup Order',
-          qty: 'Pending weigh',
-          total: b.totalEstimate ? `₹${b.totalEstimate}` : 'To confirm',
-          address: b.address || 'Nerul West',
-          slot: `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Morning'}`,
+          id: b.id || `UC-${26092 + idx}`,
+          name: b.customerName || 'Online Booking',
+          phone: b.phone || '98XXXXXX00',
+          service: b.serviceType || 'Laundry Service',
+          qty: '3 kg (estimate)',
+          total: b.totalEstimate ? `₹${b.totalEstimate} est.` : 'To confirm',
+          address: b.address || 'Sample address, Nerul West',
+          slot: `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Afternoon'}`,
           status: 'New Request',
-          notes: b.notes || 'Submitted from Web App',
+          notes: b.notes || 'Submitted via web booking form',
         }));
 
         setOrders((prev) => {
           const ids = new Set(prev.map((o) => o.id));
-          const newOnes = mapped.filter((m) => !ids.has(m.id));
-          return [...newOnes, ...prev];
+          const additions = mapped.filter((m) => !ids.has(m.id));
+          return [...additions, ...prev];
         });
       }
     } catch (e) {
-      console.warn(e);
+      console.warn('LocalStorage error:', e);
     }
   }, []);
+
+  const selectedOrder = orders.find((x) => x.id === selectedId) || orders[0];
+
+  useEffect(() => {
+    if (selectedOrder) {
+      setStatusSelect(selectedOrder.status);
+    }
+  }, [selectedOrder?.id]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  const selectedOrder = orders.find((o) => o.id === selectedId) || orders[0];
+  const getStatusClass = (s: string) => {
+    if (s === 'New Request') return 'new';
+    if (s === 'Call Confirmed') return 'confirmed';
+    if (s.includes('Pickup') || s === 'Picked Up') return 'pickup';
+    if (
+      s.includes('Cleaning') ||
+      s.includes('Inspection') ||
+      s === 'Quotation Sent' ||
+      s === 'Quality Check'
+    )
+      return 'clean';
+    if (s === 'Delivered') return 'delivered';
+    return '';
+  };
 
   const filteredOrders = orders.filter((o) => {
-    const matchFilter = statusFilter === 'All' || o.status === statusFilter;
-    const matchSearch =
-      !searchQuery ||
-      [o.id, o.name, o.phone, o.service, o.address]
-        .join(' ')
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase().trim());
+    const matchFilter = filter === 'All' || o.status === filter;
+    const matchSearch = [o.id, o.name, o.phone, o.service]
+      .join(' ')
+      .toLowerCase()
+      .includes(search.toLowerCase().trim());
     return matchFilter && matchSearch;
   });
 
-  const getStatusPillClass = (st: string) => {
-    if (st === 'New Request') return 'bg-blue-100 text-blue-800 border-blue-200';
-    if (st === 'Call Confirmed') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    if (st.includes('Pickup') || st === 'Picked Up') return 'bg-amber-100 text-amber-800 border-amber-200';
-    if (st === 'Delivered') return 'bg-teal-100 text-teal-800 border-teal-200';
-    if (st === 'Cancelled') return 'bg-red-100 text-red-800 border-red-200';
-    return 'bg-purple-100 text-purple-800 border-purple-200';
-  };
-
-  const updateOrderStatus = (newStatus: CrmOrder['status']) => {
+  const handleUpdateStatus = () => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === selectedOrder.id ? { ...o, status: newStatus } : o))
+      prev.map((o) => (o.id === selectedOrder.id ? { ...o, status: statusSelect as any } : o))
     );
-    showToast(`Order #${selectedOrder.id} status updated to: ${newStatus}`);
+    showToast('Demo status updated. No real customer notification was sent.');
   };
 
-  const handleQuickAddOrder = () => {
-    const newId = `UC-${26095 + orders.length}`;
-    const newOrder: CrmOrder = {
-      id: newId,
-      name: 'Walk-in Customer (Nerul)',
-      phone: '+91 74004 74132',
+  const handleConfirmBtn = () => {
+    if (selectedOrder.status === 'New Request') {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === selectedOrder.id ? { ...o, status: 'Call Confirmed' } : o))
+      );
+      setStatusSelect('Call Confirmed');
+      showToast('Demo only: mark as confirmed after an actual customer call.');
+    } else {
+      showToast('Check the selected order status before confirming.');
+    }
+  };
+
+  const handleAssignBtn = () => {
+    if (['Call Confirmed', 'New Request'].includes(selectedOrder.status)) {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === selectedOrder.id ? { ...o, status: 'Pickup Assigned' } : o))
+      );
+      setStatusSelect('Pickup Assigned');
+      showToast('Demo only: assign a real delivery partner and slot in the live system.');
+    } else {
+      showToast('Pickup assignment is available before collection.');
+    }
+  };
+
+  const handleNewOrder = () => {
+    const n = orders.length + 26087;
+    const newOrd: CrmOrder = {
+      id: 'UC-' + n,
+      name: 'New Demo Customer',
+      phone: 'Not provided',
       service: 'Wash & Fold',
-      qty: '5 kg standard',
-      total: '₹545 est.',
-      address: 'Shop drop-off, Sector 6, Nerul',
-      slot: 'Today · Express 24hr',
+      qty: 'To confirm',
+      total: 'To confirm',
+      address: 'Address pending',
+      slot: 'Not scheduled',
       status: 'New Request',
-      notes: 'Customer dropped off garments at counter.',
+      notes: 'Demo order',
     };
-    setOrders([newOrder, ...orders]);
-    setSelectedId(newId);
-    showToast('New order created successfully.');
-  };
-
-  const handleSendWhatsAppUpdate = () => {
-    const cleanPhone = selectedOrder.phone.replace(/[^0-9]/g, '');
-    const msg = encodeURIComponent(
-      `Hi ${selectedOrder.name}! 👋\n\n` +
-      `This is an update from *U CLEAN Nerul West* regarding your Order *#${selectedOrder.id}*.\n` +
-      `📌 Current Status: *${selectedOrder.status}*\n` +
-      `🧺 Service: ${selectedOrder.service}\n` +
-      `🚚 Slot: ${selectedOrder.slot}\n\n` +
-      `For any questions, reach us at +91 74004 74132. Thank you for choosing U CLEAN!`
-    );
-    window.open(`https://wa.me/${cleanPhone || '917400474132'}?text=${msg}`, '_blank');
+    setOrders([newOrd, ...orders]);
+    setSelectedId(newOrd.id);
+    showToast('Demo order added. This will disappear when the page is refreshed.');
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6f4] text-[#17251d] flex flex-col font-sans">
-      {/* Top Navbar */}
-      <header className="bg-[#072618] text-white p-3.5 px-5 flex items-center justify-between shadow-md border-b border-[#008f51]/40">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-[#008f51] rounded-xl flex items-center justify-center font-black text-lg text-white shadow-sm">
-            U
-          </div>
+    <div className="crm-scope">
+      <style>{`
+        .crm-scope {
+          --g: #174d3b;
+          --lime: #d8f36a;
+          --bg: #f4f6f4;
+          --ink: #17251d;
+          --muted: #69766d;
+          --line: #e1e7e1;
+          --white: #fff;
+          --blue: #eaf2ff;
+          --orange: #fff1dd;
+          --green: #e2f5e8;
+          min-height: 100vh;
+          background: var(--bg);
+          color: var(--ink);
+          font: 14px/1.45 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        }
+        .crm-scope * {
+          box-sizing: border-box;
+        }
+        .crm-scope .sidebar {
+          position: fixed;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 225px;
+          background: #12382b;
+          color: white;
+          padding: 24px 15px;
+          z-index: 30;
+        }
+        .crm-scope .logo {
+          font-size: 22px;
+          font-weight: 950;
+          margin: 0 0 5px;
+        }
+        .crm-scope .sub {
+          font-size: 10px;
+          color: #b9d1c0;
+          letter-spacing: 1.5px;
+        }
+        .crm-scope .demo {
+          font-size: 10px;
+          background: #ffffff18;
+          border-radius: 7px;
+          padding: 8px;
+          margin: 20px 0;
+        }
+        .crm-scope .nav {
+          display: block;
+          color: #d6e4da;
+          padding: 12px;
+          border-radius: 9px;
+          margin: 4px 0;
+          text-decoration: none;
+          cursor: pointer;
+        }
+        .crm-scope .nav.active,
+        .crm-scope .nav:hover {
+          background: #ffffff18;
+          color: white;
+        }
+        .crm-scope .sidefoot {
+          position: absolute;
+          bottom: 20px;
+          font-size: 11px;
+          color: #b9d1c0;
+          line-height: 1.5;
+        }
+        .crm-scope .backbtn {
+          margin-top: 15px;
+          display: block;
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 7px;
+          background: #ffffff18;
+          color: #d8f36a;
+          border: 1px solid #ffffff25;
+          font-size: 11px;
+          font-weight: 800;
+          text-align: center;
+          cursor: pointer;
+        }
+        .crm-scope .backbtn:hover {
+          background: #ffffff30;
+        }
+        .crm-scope .main {
+          margin-left: 225px;
+          padding: 25px;
+          max-width: 1500px;
+        }
+        .crm-scope .head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 15px;
+          margin-bottom: 22px;
+        }
+        .crm-scope .head h1 {
+          font-size: 27px;
+          margin: 0;
+          letter-spacing: -1px;
+          font-weight: 800;
+        }
+        .crm-scope .head p {
+          color: var(--muted);
+          margin: 4px 0 0;
+        }
+        .crm-scope .tag {
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 9px;
+          padding: 10px 12px;
+          font-size: 11px;
+          font-weight: 800;
+        }
+        .crm-scope .stats {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 13px;
+        }
+        .crm-scope .stat,
+        .crm-scope .panel {
+          background: white;
+          border: 1px solid var(--line);
+          border-radius: 14px;
+          padding: 18px;
+        }
+        .crm-scope .stat span {
+          color: var(--muted);
+          font-size: 12px;
+        }
+        .crm-scope .stat strong {
+          display: block;
+          font-size: 27px;
+          letter-spacing: -1px;
+          margin: 7px 0;
+          font-weight: 800;
+        }
+        .crm-scope .stat small {
+          color: var(--g);
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .crm-scope .toolbar {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin: 20px 0;
+        }
+        .crm-scope .toolbar input,
+        .crm-scope .toolbar select {
+          border: 1px solid var(--line);
+          background: white;
+          padding: 11px;
+          border-radius: 9px;
+          min-width: 160px;
+          font-size: 13px;
+          color: var(--ink);
+        }
+        .crm-scope .toolbar input {
+          flex: 1;
+          max-width: 320px;
+        }
+        .crm-scope .btn {
+          border: 0;
+          background: var(--g);
+          color: white;
+          padding: 11px 14px;
+          border-radius: 9px;
+          font-weight: 800;
+          cursor: pointer;
+          font-size: 13px;
+        }
+        .crm-scope .btn:hover {
+          opacity: 0.92;
+        }
+        .crm-scope .btn.light {
+          background: white;
+          color: var(--g);
+          border: 1px solid var(--line);
+        }
+        .crm-scope .btn.light:hover {
+          background: #f4f6f4;
+        }
+        .crm-scope .layout {
+          display: grid;
+          grid-template-columns: 1.55fr 1fr;
+          gap: 15px;
+        }
+        .crm-scope .panel h2 {
+          font-size: 16px;
+          margin: 0 0 15px;
+          font-weight: 800;
+        }
+        .crm-scope .tablewrap {
+          overflow: auto;
+        }
+        .crm-scope table {
+          border-collapse: collapse;
+          width: 100%;
+          min-width: 690px;
+        }
+        .crm-scope th,
+        .crm-scope td {
+          text-align: left;
+          padding: 12px 10px;
+          border-bottom: 1px solid #edf0ed;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .crm-scope th {
+          color: var(--muted);
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: .7px;
+          font-weight: 800;
+        }
+        .crm-scope .customer {
+          font-weight: 850;
+        }
+        .crm-scope .muted {
+          color: var(--muted);
+          font-size: 11px;
+        }
+        .crm-scope .pill {
+          display: inline-block;
+          border-radius: 50px;
+          padding: 5px 8px;
+          font-size: 10px;
+          font-weight: 850;
+          background: #eef1ef;
+        }
+        .crm-scope .pill.new {
+          background: var(--blue);
+          color: #2758a4;
+        }
+        .crm-scope .pill.confirmed {
+          background: var(--green);
+          color: #17653b;
+        }
+        .crm-scope .pill.pickup {
+          background: var(--orange);
+          color: #955800;
+        }
+        .crm-scope .pill.clean {
+          background: #eee8ff;
+          color: #6844a4;
+        }
+        .crm-scope .pill.delivered {
+          background: #e9efeb;
+          color: #45584b;
+        }
+        .crm-scope .rowbtn {
+          padding: 7px 9px;
+          border-radius: 7px;
+          border: 1px solid var(--line);
+          background: #fff;
+          font-size: 10px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+        .crm-scope .rowbtn:hover {
+          background: var(--bg);
+        }
+        .crm-scope .detail {
+          margin-top: 15px;
+        }
+        .crm-scope .detailgrid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .crm-scope .detailbox {
+          background: #f7f9f7;
+          border-radius: 9px;
+          padding: 11px;
+        }
+        .crm-scope .detailbox small {
+          display: block;
+          color: var(--muted);
+          font-size: 10px;
+          font-weight: 600;
+        }
+        .crm-scope .detailbox strong {
+          display: block;
+          font-size: 12px;
+          margin-top: 3px;
+          font-weight: 700;
+        }
+        .crm-scope .timeline {
+          border-left: 2px solid #dce6dd;
+          margin: 14px 0 0 7px;
+          padding-left: 16px;
+        }
+        .crm-scope .event {
+          position: relative;
+          margin: 0 0 15px;
+        }
+        .crm-scope .event:before {
+          content: "";
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: var(--g);
+          left: -21px;
+          top: 5px;
+        }
+        .crm-scope .event strong {
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .crm-scope .event p {
+          font-size: 11px;
+          color: var(--muted);
+          margin: 2px 0 0;
+        }
+        .crm-scope .actions {
+          display: flex;
+          gap: 7px;
+          flex-wrap: wrap;
+          margin-top: 15px;
+        }
+        .crm-scope .notice {
+          font-size: 11px;
+          color: var(--muted);
+          margin-top: 16px;
+        }
+        .crm-scope .toast {
+          background: #e2f5e8;
+          color: #17653b;
+          padding: 10px;
+          border-radius: 8px;
+          margin-top: 10px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        @media(max-width: 1050px) {
+          .crm-scope .sidebar {
+            width: 180px;
+          }
+          .crm-scope .main {
+            margin-left: 180px;
+            padding: 18px;
+          }
+          .crm-scope .stats {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          .crm-scope .layout {
+            grid-template-columns: 1fr;
+          }
+        }
+        @media(max-width: 650px) {
+          .crm-scope .sidebar {
+            position: static;
+            width: auto;
+            padding: 13px 15px;
+          }
+          .crm-scope .sidebar .nav,
+          .crm-scope .sidefoot,
+          .crm-scope .demo {
+            display: none;
+          }
+          .crm-scope .logo {
+            font-size: 19px;
+          }
+          .crm-scope .main {
+            margin: 0;
+            padding: 13px;
+          }
+          .crm-scope .head {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+          .crm-scope .head h1 {
+            font-size: 23px;
+          }
+          .crm-scope .stats {
+            gap: 8px;
+          }
+          .crm-scope .stat {
+            padding: 12px;
+          }
+          .crm-scope .stat strong {
+            font-size: 23px;
+          }
+          .crm-scope .toolbar input,
+          .crm-scope .toolbar select {
+            flex: 1;
+            min-width: 130px;
+          }
+          .crm-scope .panel {
+            padding: 13px;
+          }
+          .crm-scope .detailgrid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+      `}</style>
+
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+        <div className="logo">UCLEAN</div>
+        <div className="sub">NERUL WEST · ORDER DESK</div>
+        <div className="demo">DEMO PORTAL · SAMPLE DATA ONLY</div>
+        
+        <a
+          className={`nav ${activeNav === 'orders' ? 'active' : ''}`}
+          href="#orders"
+          onClick={() => setActiveNav('orders')}
+        >
+          ▦ &nbsp; Orders
+        </a>
+        <a
+          className={`nav ${activeNav === 'orderdetail' ? 'active' : ''}`}
+          href="#orderdetail"
+          onClick={() => setActiveNav('orderdetail')}
+        >
+          ◉ &nbsp; Order details
+        </a>
+        <a
+          className={`nav ${activeNav === 'workflow' ? 'active' : ''}`}
+          href="#workflow"
+          onClick={() => setActiveNav('workflow')}
+        >
+          ⇄ &nbsp; Workflow
+        </a>
+        <a
+          className={`nav ${activeNav === 'customers' ? 'active' : ''}`}
+          href="#customers"
+          onClick={() => setActiveNav('customers')}
+        >
+          ♙ &nbsp; Customer records
+        </a>
+        <a
+          className={`nav ${activeNav === 'reports' ? 'active' : ''}`}
+          href="#reports"
+          onClick={() => setActiveNav('reports')}
+        >
+          ▥ &nbsp; Reports
+        </a>
+
+        <button onClick={onBackToStore} className="backbtn">
+          ← Back to Store Website
+        </button>
+
+        <div className="sidefoot">
+          Shop 1, Plot 219<br />
+          Sector 6, Nerul West
+        </div>
+      </aside>
+
+      {/* MAIN CONTAINER */}
+      <main className="main">
+        {/* HEADER */}
+        <div className="head">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-heading text-lg font-black tracking-wide text-white">
-                UCLEAN ORDER DESK CRM
-              </h1>
-              <span className="bg-[#008f51] text-[#a8f0cf] text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                Live Portal
-              </span>
-            </div>
-            <p className="text-[11px] text-[#a8dec4]">
-              Nerul West &bull; Sector 6 Order &amp; Logistics Management
-            </p>
+            <h1>Order Management</h1>
+            <p>Review requests, confirm orders and track pickup through delivery.</p>
           </div>
+          <span className="tag">● DEMO · NOT CONNECTED TO DATABASE</span>
         </div>
 
-        <button
-          onClick={onBackToStore}
-          className="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all flex items-center gap-1"
-        >
-          <span>&larr; Back to Client Website</span>
-        </button>
-      </header>
-
-      {/* Main CRM Body */}
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto w-full space-y-5">
-        
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white p-4 rounded-2xl border border-[#e1e7e1] shadow-sm">
-            <span className="text-xs text-[#69766d] font-bold block">Total Active Orders</span>
-            <strong className="text-2xl font-black text-[#072618] block mt-1 font-heading">
-              {orders.length}
-            </strong>
-            <small className="text-[#008f51] font-extrabold text-[11px] flex items-center gap-1 mt-0.5">
-              <TrendingUp className="w-3 h-3" /> Real-time active
-            </small>
+        {/* STATS */}
+        <div className="stats">
+          <div className="stat">
+            <span>Today&apos;s order requests</span>
+            <strong id="statTotal">{orders.length}</strong>
+            <small>Demo count</small>
           </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-[#e1e7e1] shadow-sm">
-            <span className="text-xs text-[#69766d] font-bold block">Awaiting Call / Confirm</span>
-            <strong className="text-2xl font-black text-amber-700 block mt-1 font-heading">
-              {orders.filter((o) => o.status === 'New Request').length}
-            </strong>
-            <small className="text-amber-600 font-bold text-[11px]">Immediate action</small>
+          <div className="stat">
+            <span>Awaiting confirmation</span>
+            <strong id="statNew">{orders.filter((o) => o.status === 'New Request').length}</strong>
+            <small>Call customer</small>
           </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-[#e1e7e1] shadow-sm">
-            <span className="text-xs text-[#69766d] font-bold block">In Pickup / Cleaning</span>
-            <strong className="text-2xl font-black text-purple-700 block mt-1 font-heading">
+          <div className="stat">
+            <span>Pickup / cleaning</span>
+            <strong>
               {orders.filter((o) => !['New Request', 'Delivered', 'Cancelled'].includes(o.status)).length}
             </strong>
-            <small className="text-purple-600 font-bold text-[11px]">In workflow</small>
+            <small>In progress</small>
           </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-[#e1e7e1] shadow-sm">
-            <span className="text-xs text-[#69766d] font-bold block">Delivered &amp; Paid</span>
-            <strong className="text-2xl font-black text-[#008f51] block mt-1 font-heading">
-              {orders.filter((o) => o.status === 'Delivered').length}
-            </strong>
-            <small className="text-[#008f51] font-bold text-[11px]">Completed</small>
+          <div className="stat">
+            <span>Delivered</span>
+            <strong>{orders.filter((o) => o.status === 'Delivered').length}</strong>
+            <small>Demo count</small>
           </div>
         </div>
 
-        {/* Toolbar */}
-        <div className="bg-white p-3.5 rounded-2xl border border-[#e1e7e1] flex flex-wrap gap-2.5 items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#69766d]" />
-              <input
-                type="text"
-                placeholder="Search by name, phone, order ID, or address..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full h-9 pl-9 pr-3 text-xs bg-[#f4f6f4] border border-[#e1e7e1] rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <Filter className="w-4 h-4 text-[#69766d]" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-9 px-2 text-xs bg-[#f4f6f4] border border-[#e1e7e1] rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
-              >
-                <option value="All">All Statuses</option>
-                <option>New Request</option>
-                <option>Call Confirmed</option>
-                <option>Pickup Assigned</option>
-                <option>Picked Up</option>
-                <option>At Store / Inspection</option>
-                <option>Quotation Sent</option>
-                <option>Cleaning In Progress</option>
-                <option>Quality Check</option>
-                <option>Ready for Delivery</option>
-                <option>Out for Delivery</option>
-                <option>Delivered</option>
-                <option>Cancelled</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleQuickAddOrder}
-              className="h-9 px-3 rounded-xl bg-[#008f51] hover:bg-[#072618] text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ Add Walk-in Order</span>
-            </button>
-
-            <button
-              onClick={() => window.print()}
-              className="h-9 px-3 rounded-xl bg-white border border-[#e1e7e1] hover:bg-[#f4f6f4] text-[#072618] text-xs font-bold flex items-center gap-1 transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Desk View</span>
-            </button>
-          </div>
+        {/* TOOLBAR */}
+        <div className="toolbar">
+          <input
+            id="search"
+            placeholder="Search order, name or phone"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            id="filter"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="All">All statuses</option>
+            {STATUS_LIST.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <button className="btn" id="newOrder" onClick={handleNewOrder}>
+            + Add demo order
+          </button>
+          <button className="btn light" onClick={() => window.print()}>
+            Print view
+          </button>
         </div>
 
-        {/* 2-Column Split: Orders Table on Left, Selected Order Details on Right */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          
-          {/* Table (Left 7 Cols) */}
-          <div className="lg:col-span-7 bg-white rounded-2xl border border-[#e1e7e1] p-4 shadow-sm flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-heading text-sm font-black text-[#072618] uppercase tracking-wider">
-                Recent Order Requests ({filteredOrders.length})
-              </h2>
-              <span className="text-[11px] text-[#69766d]">Click to view details</span>
-            </div>
-
-            <div className="overflow-x-auto flex-1 max-h-[560px] overflow-y-auto">
-              <table className="w-full text-left border-collapse text-xs">
+        {/* 2-COLUMN LAYOUT */}
+        <div className="layout">
+          {/* ORDERS TABLE */}
+          <section className="panel" id="orders">
+            <h2>Recent order requests</h2>
+            <div className="tablewrap">
+              <table>
                 <thead>
-                  <tr className="border-b border-[#e1e7e1] text-[#69766d] uppercase text-[10px] font-black">
-                    <th className="py-2.5 px-2">Order ID</th>
-                    <th className="py-2.5 px-2">Customer</th>
-                    <th className="py-2.5 px-2">Service</th>
-                    <th className="py-2.5 px-2">Estimate</th>
-                    <th className="py-2.5 px-2">Status</th>
-                    <th className="py-2.5 px-2 text-right">Action</th>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Customer</th>
+                    <th>Service</th>
+                    <th>Est. total</th>
+                    <th>Status</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#edf0ed]">
+                <tbody id="orderRows">
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-[#69766d]">
-                        No orders matching the filter.
-                      </td>
+                      <td colSpan={6}>No matching demo orders.</td>
                     </tr>
                   ) : (
-                    filteredOrders.map((ord) => {
-                      const isSelected = ord.id === selectedId;
-                      return (
-                        <tr
-                          key={ord.id}
-                          onClick={() => setSelectedId(ord.id)}
-                          className={`hover:bg-[#f7f9f7] transition-colors cursor-pointer ${
-                            isSelected ? 'bg-[#eaf8f1]/60 font-semibold' : ''
-                          }`}
-                        >
-                          <td className="py-3 px-2 whitespace-nowrap">
-                            <strong className="text-[#072618] block">{ord.id}</strong>
-                            <span className="text-[10px] text-[#69766d] block">{ord.slot}</span>
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className="font-bold text-[#072618] block">{ord.name}</span>
-                            <span className="text-[10px] text-[#69766d] block">{ord.phone}</span>
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className="block text-[#072618]">{ord.service}</span>
-                            <span className="text-[10px] text-[#69766d] block">{ord.qty}</span>
-                          </td>
-                          <td className="py-3 px-2 font-mono font-bold text-[#008f51] whitespace-nowrap">
-                            {ord.total}
-                          </td>
-                          <td className="py-3 px-2 whitespace-nowrap">
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black border ${getStatusPillClass(
-                                ord.status
-                              )}`}
-                            >
-                              {ord.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-2 text-right whitespace-nowrap">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedId(ord.id);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-[#FAF6EE] hover:bg-[#072618] hover:text-white border border-[#DECBB0] text-[10.5px] font-bold transition-colors"
-                            >
-                              Inspect
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    filteredOrders.map((o) => (
+                      <tr key={o.id}>
+                        <td>
+                          <b>{o.id}</b>
+                          <div className="muted">{o.slot}</div>
+                        </td>
+                        <td>
+                          <span className="customer">{o.name}</span>
+                          <div className="muted">{o.phone}</div>
+                        </td>
+                        <td>
+                          {o.service}
+                          <div className="muted">{o.qty}</div>
+                        </td>
+                        <td>{o.total}</td>
+                        <td>
+                          <span className={`pill ${getStatusClass(o.status)}`}>
+                            {o.status}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="rowbtn"
+                            onClick={() => setSelectedId(o.id)}
+                          >
+                            View / update
+                          </button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
+            <p className="notice">
+              Select an order to inspect the details and update its status. This browser demo uses temporary sample data only.
+            </p>
+          </section>
 
-          {/* Selected Order Panel (Right 5 Cols) */}
-          <div className="lg:col-span-5 bg-white rounded-2xl border border-[#e1e7e1] p-5 shadow-sm flex flex-col justify-between">
-            {selectedOrder ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-[#e1e7e1] pb-3">
-                  <div>
-                    <span className="text-[10px] font-black tracking-wider uppercase text-[#69766d]">
-                      ORDER INSPECTION
-                    </span>
-                    <h3 className="font-heading text-lg font-black text-[#072618] flex items-center gap-2">
-                      #{selectedOrder.id}
-                    </h3>
-                  </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-black border ${getStatusPillClass(
-                      selectedOrder.status
-                    )}`}
-                  >
-                    {selectedOrder.status}
-                  </span>
+          {/* ORDER DETAIL INSPECTOR */}
+          <section className="panel" id="orderdetail">
+            <h2>
+              Selected order <span id="selectedId" className="muted">#{selectedOrder.id}</span>
+            </h2>
+            <div id="detailContent">
+              <span className={`pill ${getStatusClass(selectedOrder.status)}`}>
+                {selectedOrder.status}
+              </span>
+              
+              <div className="detailgrid" style={{ marginTop: '13px' }}>
+                <div className="detailbox">
+                  <small>Customer</small>
+                  <strong>{selectedOrder.name}</strong>
                 </div>
-
-                {/* Customer Details Grid */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="bg-[#f7f9f7] p-2.5 rounded-xl border border-[#e1e7e1]">
-                    <span className="text-[10px] font-bold text-[#69766d] block">Customer</span>
-                    <strong className="text-xs text-[#072618] block mt-0.5">{selectedOrder.name}</strong>
-                  </div>
-
-                  <div className="bg-[#f7f9f7] p-2.5 rounded-xl border border-[#e1e7e1]">
-                    <span className="text-[10px] font-bold text-[#69766d] block">Phone / WhatsApp</span>
-                    <strong className="text-xs text-[#072618] block mt-0.5">{selectedOrder.phone}</strong>
-                  </div>
-
-                  <div className="bg-[#f7f9f7] p-2.5 rounded-xl border border-[#e1e7e1]">
-                    <span className="text-[10px] font-bold text-[#69766d] block">Service &amp; Qty</span>
-                    <strong className="text-xs text-[#072618] block mt-0.5">
-                      {selectedOrder.service} ({selectedOrder.qty})
-                    </strong>
-                  </div>
-
-                  <div className="bg-[#f7f9f7] p-2.5 rounded-xl border border-[#e1e7e1]">
-                    <span className="text-[10px] font-bold text-[#69766d] block">Estimate Amount</span>
-                    <strong className="text-xs text-[#008f51] block mt-0.5">{selectedOrder.total}</strong>
-                  </div>
-
-                  <div className="col-span-2 bg-[#f7f9f7] p-2.5 rounded-xl border border-[#e1e7e1]">
-                    <span className="text-[10px] font-bold text-[#69766d] block">Pickup Address</span>
-                    <strong className="text-xs text-[#072618] block mt-0.5 leading-snug">
-                      {selectedOrder.address}
-                    </strong>
-                  </div>
-
-                  <div className="col-span-2 bg-[#f7f9f7] p-2.5 rounded-xl border border-[#e1e7e1]">
-                    <span className="text-[10px] font-bold text-[#69766d] block">Internal Notes / Instructions</span>
-                    <p className="text-xs text-[#072618] mt-0.5">{selectedOrder.notes || 'None'}</p>
-                  </div>
+                <div className="detailbox">
+                  <small>Phone</small>
+                  <strong>{selectedOrder.phone}</strong>
                 </div>
-
-                {/* Status Update Dropdown */}
-                <div className="bg-[#FAF6EE] p-3 rounded-xl border border-[#DECBB0]">
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-[#632608] mb-1.5 font-heading">
-                    Update Order Status
-                  </label>
-                  <select
-                    value={selectedOrder.status}
-                    onChange={(e) => updateOrderStatus(e.target.value as any)}
-                    className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-[#DECBB0] bg-white text-[#072618] focus:outline-none focus:ring-2 focus:ring-[#008f51]"
-                  >
-                    <option>New Request</option>
-                    <option>Call Confirmed</option>
-                    <option>Pickup Assigned</option>
-                    <option>Picked Up</option>
-                    <option>At Store / Inspection</option>
-                    <option>Quotation Sent</option>
-                    <option>Cleaning In Progress</option>
-                    <option>Quality Check</option>
-                    <option>Ready for Delivery</option>
-                    <option>Out for Delivery</option>
-                    <option>Delivered</option>
-                    <option>Cancelled</option>
-                  </select>
+                <div className="detailbox">
+                  <small>Service / quantity</small>
+                  <strong>{selectedOrder.service} · {selectedOrder.qty}</strong>
                 </div>
-
-                {/* Direct Action Buttons */}
-                <div className="flex flex-col gap-2 pt-1">
-                  <button
-                    onClick={() => updateOrderStatus('Call Confirmed')}
-                    className="w-full h-10 rounded-xl bg-[#008f51] hover:bg-[#072618] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <UserCheck className="w-4 h-4" />
-                    <span>Confirm After Phone Call</span>
-                  </button>
-
-                  <button
-                    onClick={handleSendWhatsAppUpdate}
-                    className="w-full h-10 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>Send WhatsApp Status Update to Customer</span>
-                  </button>
-
-                  <button
-                    onClick={() => updateOrderStatus('Pickup Assigned')}
-                    className="w-full h-10 rounded-xl bg-[#FAF6EE] hover:bg-[#ECE0C6] text-[#632608] font-bold text-xs border border-[#DECBB0] flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <Truck className="w-4 h-4" />
-                    <span>Assign Pickup Partner</span>
-                  </button>
+                <div className="detailbox">
+                  <small>Estimate</small>
+                  <strong>{selectedOrder.total}</strong>
                 </div>
-
-                {toastMsg && (
-                  <div className="p-2.5 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold text-center animate-in fade-in">
-                    {toastMsg}
-                  </div>
-                )}
+                <div className="detailbox" style={{ gridColumn: '1/-1' }}>
+                  <small>Pickup address</small>
+                  <strong>{selectedOrder.address}</strong>
+                </div>
+                <div className="detailbox" style={{ gridColumn: '1/-1' }}>
+                  <small>Internal note</small>
+                  <strong>{selectedOrder.notes}</strong>
+                </div>
               </div>
-            ) : (
-              <div className="p-8 text-center text-[#69766d]">No order selected.</div>
-            )}
-          </div>
 
+              <div className="timeline">
+                <div className="event">
+                  <strong>Order request received</strong>
+                  <p>Website order form · sample event</p>
+                </div>
+                <div className="event">
+                  <strong>Current status: {selectedOrder.status}</strong>
+                  <p>Next action depends on confirmation and operations stage.</p>
+                </div>
+              </div>
+
+              <label style={{ display: 'block', marginTop: '15px', fontSize: '11px', fontWeight: 800 }}>
+                Update status (demo)
+              </label>
+              
+              <select
+                id="statusChange"
+                value={statusSelect}
+                onChange={(e) => setStatusSelect(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #dfe7e1',
+                  borderRadius: '8px',
+                  marginTop: '6px',
+                }}
+              >
+                {STATUS_LIST.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                className="rowbtn"
+                style={{ marginTop: '8px' }}
+                onClick={handleUpdateStatus}
+              >
+                Save status update
+              </button>
+            </div>
+
+            <div className="actions">
+              <button className="btn" id="confirmBtn" onClick={handleConfirmBtn}>
+                Confirm after call
+              </button>
+              <button className="btn light" id="assignBtn" onClick={handleAssignBtn}>
+                Assign pickup
+              </button>
+            </div>
+
+            {toastMsg && (
+              <div className="toast" style={{ display: 'block' }}>
+                {toastMsg}
+              </div>
+            )}
+          </section>
         </div>
 
-      </div>
+        {/* WORKFLOW */}
+        <section className="panel detail" id="workflow">
+          <h2>Order lifecycle &amp; status meanings</h2>
+          <div className="detailgrid">
+            <div className="detailbox">
+              <small>01 · NEW REQUEST</small>
+              <strong>Customer submitted order form</strong>
+            </div>
+            <div className="detailbox">
+              <small>02 · CALL CONFIRMED</small>
+              <strong>Staff called, checked details and confirmed</strong>
+            </div>
+            <div className="detailbox">
+              <small>03 · PICKUP ASSIGNED</small>
+              <strong>Delivery partner and slot assigned</strong>
+            </div>
+            <div className="detailbox">
+              <small>04 · PICKED UP</small>
+              <strong>Items collected; count and condition recorded</strong>
+            </div>
+            <div className="detailbox">
+              <small>05 · INSPECTION / QUOTE</small>
+              <strong>Actual weight/items and final amount checked</strong>
+            </div>
+            <div className="detailbox">
+              <small>06 · CLEANING</small>
+              <strong>Customer approves quote; cleaning starts</strong>
+            </div>
+            <div className="detailbox">
+              <small>07 · QUALITY CHECK</small>
+              <strong>Order checked and packed</strong>
+            </div>
+            <div className="detailbox">
+              <small>08 · DELIVERY</small>
+              <strong>Partner assigned; delivery and payment tracked</strong>
+            </div>
+          </div>
+          <p className="notice">
+            Recommended rule: do not dispatch a pickup until the customer has confirmed by phone or WhatsApp. Do not start chargeable processing until the final quotation is approved.
+          </p>
+        </section>
+
+        {/* CUSTOMER RECORD */}
+        <section className="panel detail" id="customers">
+          <h2>Customer record example</h2>
+          <div className="detailgrid">
+            <div className="detailbox">
+              <small>Customer</small>
+              <strong id="custName">{selectedOrder.name}</strong>
+            </div>
+            <div className="detailbox">
+              <small>Phone</small>
+              <strong id="custPhone">{selectedOrder.phone}</strong>
+            </div>
+            <div className="detailbox">
+              <small>Address</small>
+              <strong id="custAddress">{selectedOrder.address}</strong>
+            </div>
+            <div className="detailbox">
+              <small>Customer type</small>
+              <strong>First order · demo</strong>
+            </div>
+          </div>
+        </section>
+
+        {/* REPORTS */}
+        <section className="panel detail" id="reports">
+          <h2>Metrics to track in the real system</h2>
+          <div className="detailgrid">
+            <div className="detailbox">
+              <small>Marketing</small>
+              <strong>Ad source → order requests → confirmed orders</strong>
+            </div>
+            <div className="detailbox">
+              <small>Operations</small>
+              <strong>Pickup on time, turnaround time, delivery success</strong>
+            </div>
+            <div className="detailbox">
+              <small>Revenue</small>
+              <strong>Average order value, service mix, discounts</strong>
+            </div>
+            <div className="detailbox">
+              <small>Retention</small>
+              <strong>Repeat orders, membership conversion, complaints</strong>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

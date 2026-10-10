@@ -64,7 +64,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`} suppressHydrationWarning>
-      <body className="antialiased bg-[#0b1a13] text-[#0c2b1e] min-h-screen flex justify-center" suppressHydrationWarning>
+      <body className="antialiased bg-[#FAF6EE] text-[#0c2b1e] min-h-screen w-full" suppressHydrationWarning>
         {children}
       </body>
     </html>
