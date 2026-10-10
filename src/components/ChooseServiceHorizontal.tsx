@@ -17,27 +17,27 @@ export function ChooseServiceHorizontal({
     {
       id: 'wash-fold',
       title: 'Wash & Fold',
-      price: '₹109/kg',
-      desc: 'Everyday laundry, washed and folded neatly.',
-      buttonText: 'Order Now →',
+      priceAmount: '₹109',
+      priceUnit: '/kg',
+      buttonText: 'Order Now',
       image: '/images/wash-fold-luxury.jpg',
       action: () => onSelectService('Wash & Fold — ₹109/kg', 'Everyday Laundry (Per Kg)'),
     },
     {
       id: 'wash-iron',
       title: 'Wash & Iron',
-      price: '₹149/kg',
-      desc: 'Laundry washed & crisp steam ironed on hangers.',
-      buttonText: 'Order Now →',
+      priceAmount: '₹149',
+      priceUnit: '/kg',
+      buttonText: 'Order Now',
       image: '/images/wash-iron-luxury.jpg',
       action: () => onSelectService('Wash & Iron — ₹149/kg', 'Steam Pressed Laundry'),
     },
     {
       id: 'dry-cleaning',
       title: 'Dry Cleaning',
-      price: 'From ₹149',
-      desc: 'Delicate care for suits, gowns, silks & woolens.',
-      buttonText: 'Check Rates →',
+      priceAmount: 'From ₹149',
+      priceUnit: '/item',
+      buttonText: 'Check Rates',
       image: '/images/dry-clean-luxury.jpg',
       action: () => {
         if (onCheckGarmentPrice) {
@@ -50,9 +50,9 @@ export function ChooseServiceHorizontal({
     {
       id: 'home-textiles',
       title: 'Home Textiles',
-      price: 'From ₹30/sq. ft.',
-      desc: 'Carpets ₹30/sq.ft · Lining curtains ₹45/sq.ft',
-      buttonText: 'Request Visit →',
+      priceAmount: 'From ₹30',
+      priceUnit: '/sq.ft',
+      buttonText: 'Request Visit',
       image: '/images/home-textiles-luxury.jpg',
       action: () => onSelectService('Home Textiles & Upholstery Care', 'Sofa, Carpet & Curtains'),
     },
@@ -71,8 +71,8 @@ export function ChooseServiceHorizontal({
             Choose Your Service
           </h2>
         </div>
-        <span className="text-[10px] font-extrabold text-[#008f51] bg-white border border-[#DECBB0] px-2.5 py-1 rounded-full shadow-sm">
-          ⚡ 4 Key Care Plans
+        <span className="text-[10px] font-extrabold text-[#008f51] bg-white border border-[#DECBB0] px-2.5 py-1 rounded-full shadow-xs">
+          ⚡ 4 Care Plans
         </span>
       </div>
 
@@ -82,10 +82,10 @@ export function ChooseServiceHorizontal({
           <div
             key={srv.id}
             onClick={srv.action}
-            className="bg-white rounded-[18px] border-[1.5px] border-[#DECBB0] p-2.5 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-[#008f51] hover:-translate-y-0.5 transition-all cursor-pointer group"
+            className="bg-white rounded-[18px] border border-[#DECBB0] p-2.5 flex flex-col justify-between shadow-2xs hover:shadow-md hover:border-[#008f51] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
           >
-            {/* Earlier Landscape 4:3 Aspect Ratio Image */}
-            <div className="relative w-full aspect-[4/3] rounded-[12px] overflow-hidden mb-2 bg-[#f6f4ee] border border-[#ECE0C6]">
+            {/* Landscape 4:3 Aspect Ratio Image */}
+            <div className="relative w-full aspect-[4/3] rounded-[13px] overflow-hidden mb-2 bg-[#f6f4ee] border border-[#ECE0C6]">
               <Image
                 src={srv.image}
                 alt={srv.title}
@@ -96,33 +96,35 @@ export function ChooseServiceHorizontal({
               />
             </div>
 
-            {/* Content */}
-            <div className="flex flex-col flex-1 justify-between">
+            {/* Content Area with Compact Spacing */}
+            <div className="flex flex-col justify-between flex-1">
               <div>
-                <h3 className="font-sans font-bold text-[14px] text-[#111827] leading-tight group-hover:text-[#008f51] transition-colors truncate tracking-tight">
+                <h3 className="font-sans font-bold text-[14px] text-[#111827] leading-snug group-hover:text-[#008f51] transition-colors truncate">
                   {srv.title}
                 </h3>
                 
-                {/* Bold Green Price */}
-                <div className="font-sans text-[14.5px] font-extrabold text-[#00874c] mt-0.5 tracking-tight">
-                  {srv.price}
+                {/* Clean Price Presentation */}
+                <div className="flex items-baseline gap-0.5 mt-0.5">
+                  <span className="font-sans text-[14.5px] font-extrabold text-[#00874c]">
+                    {srv.priceAmount}
+                  </span>
+                  <span className="text-[10px] text-[#6B7280] font-semibold">
+                    {srv.priceUnit}
+                  </span>
                 </div>
-
-                <p className="font-sans text-[11.5px] text-[#374151] font-medium leading-[1.45] mt-1 mb-2.5 line-clamp-2">
-                  {srv.desc}
-                </p>
               </div>
 
-              {/* Brand Styled Button */}
+              {/* High-End Action Button */}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   srv.action();
                 }}
-                className="w-full py-1.5 px-2 rounded-full bg-[#008f51] hover:bg-[#072618] text-white font-sans font-semibold text-[11.5px] tracking-normal flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+                className="w-full mt-2.5 py-1.5 px-3 rounded-full bg-[#008f51] group-hover:bg-[#072618] text-white font-sans font-bold text-[11px] tracking-normal flex items-center justify-center gap-1 shadow-2xs group-hover:shadow-xs active:scale-95 transition-all"
               >
                 <span>{srv.buttonText}</span>
+                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
 

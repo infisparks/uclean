@@ -13,20 +13,23 @@ import {
   ShieldCheck,
   Sparkles,
   Truck,
+  Check,
   User,
+  Building2,
   Calendar,
   FileText,
+  Copy,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
 
 const AVAILABLE_SERVICES = [
-  { id: 'Wash & Fold — ₹109/kg', name: 'Wash & Fold', rate: '₹109 / kg', desc: 'Everyday laundry washed & neatly folded' },
-  { id: 'Wash & Iron — ₹149/kg', name: 'Wash & Iron', rate: '₹149 / kg', desc: 'Steam pressed on hangers' },
-  { id: 'Dry Cleaning — from ₹149', name: 'Dry Cleaning', rate: 'From ₹149', desc: 'Suits, gowns, blazers & delicate fabrics' },
-  { id: 'Home Textiles & Sofa Cleaning', name: 'Sofa & Carpet Care', rate: 'From ₹30/sq.ft', desc: 'Deep wet extraction & shampooing' },
-  { id: 'Lining Curtain — ₹45/sq. ft.', name: 'Curtains (Parda)', rate: '₹45/sq.ft', desc: 'Anti-shrink steam dry cleaning' },
-  { id: 'Shoe Spa & Cleaning', name: 'Shoe Spa & Cleaning', rate: 'Buy 2 Get 1 Free', desc: 'Sneakers, leather boots & sports shoes' },
+  { id: 'Wash & Fold — ₹109/kg', name: 'Wash & Fold', icon: '🧺', rate: '₹109/kg' },
+  { id: 'Wash & Iron — ₹149/kg', name: 'Wash & Iron', icon: '👔', rate: '₹149/kg' },
+  { id: 'Dry Cleaning — from ₹149', name: 'Dry Cleaning', icon: '🧥', rate: 'From ₹149' },
+  { id: 'Home Textiles & Sofa Cleaning', name: 'Sofa & Carpet', icon: '🛋️', rate: 'From ₹30/sq.ft' },
+  { id: 'Lining Curtain — ₹45/sq. ft.', name: 'Curtains (Parda)', icon: '🪟', rate: '₹45/sq.ft' },
+  { id: 'Shoe Spa & Cleaning', name: 'Shoe Spa Care', icon: '👟', rate: 'Buy 2 Get 1' },
 ];
 
 function OrderFormContent() {
@@ -50,6 +53,7 @@ function OrderFormContent() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
     if (urlService) {
@@ -71,6 +75,14 @@ function OrderFormContent() {
     );
   };
 
+  const handleCopyId = () => {
+    if (bookingId) {
+      navigator.clipboard.writeText(bookingId);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedServices.length) {
@@ -78,7 +90,7 @@ function OrderFormContent() {
       return;
     }
     if (!name.trim() || !phone.trim() || !address.trim()) {
-      alert('Please fill in required fields: Name, Phone Number, and Complete Address.');
+      alert('Please fill in required fields: Name, Mobile Number, and Complete Address.');
       return;
     }
 
@@ -92,15 +104,15 @@ function OrderFormContent() {
         address: fullAddress,
         preferredDate: date || 'Earliest available slot',
         preferredTimeSlot: time,
-        notes: `Services: ${selectedServices.join(', ')} | Garments: ${items || 'Not specified'} | Notes: ${notes || 'None'} | Contact Pref: ${contact}`,
+        notes: `Services: ${selectedServices.join(', ')} | Garments: ${items || 'None'} | Approx Qty: ${quantity || 'None'} | Notes: ${notes || 'None'} | Contact: ${contact}`,
         status: 'new',
       });
 
       if (res.success) {
         setBookingId(res.id);
         confetti({
-          particleCount: 100,
-          spread: 80,
+          particleCount: 110,
+          spread: 85,
           origin: { y: 0.5 },
           colors: ['#008f51', '#d4af37', '#ffffff', '#ffd700'],
         });
@@ -108,7 +120,7 @@ function OrderFormContent() {
       }
     } catch (err) {
       console.error('Booking submission failed:', err);
-      alert('Something went wrong while submitting. Please call or WhatsApp us directly.');
+      alert('Something went wrong. Please connect with us directly via phone or WhatsApp.');
     } finally {
       setLoading(false);
     }
@@ -122,103 +134,121 @@ function OrderFormContent() {
       `👤 Name: ${name}`,
       `📞 Mobile: ${phone}`,
       `📮 PIN: ${pin}`,
-      `🏢 Building / Flat: ${building || 'Not specified'}`,
+      `🏢 Flat / Building: ${building || 'Not specified'}`,
       `📍 Address: ${address}`,
       `🧺 Services: ${selectedServices.join(', ')}`,
       `⚖️ Approx. Quantity: ${quantity || 'Not specified'}`,
       `📅 Pickup Date: ${date || 'Earliest available'}`,
-      `⏰ Preferred Time: ${time}`,
-      `💬 Contact Preference: ${contact}`,
+      `⏰ Preferred Slot: ${time}`,
+      `💬 Contact Via: ${contact}`,
       `👔 Garments Note: ${items || 'None'}`,
       `📝 Instructions: ${notes || 'None'}`,
       '',
-      'Please confirm my pickup slot and final charges.',
+      'Please confirm my pickup slot and charges.',
     ].join('\n');
 
     window.open('https://wa.me/917400474132?text=' + encodeURIComponent(msg), '_blank');
   };
 
   return (
-    <div className="app-container min-h-screen bg-[#FAF6EE] relative flex flex-col pb-16 font-sans">
+    <div className="app-container min-h-screen bg-[#FAF6EE] relative flex flex-col pb-12 font-sans antialiased">
       
-      {/* Top Navigation Bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#DECBB0] px-4 py-3 flex items-center justify-between shadow-xs">
+      {/* 1. Executive Top Header Bar */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#DECBB0] px-4 py-3 flex items-center justify-between shadow-2xs">
         <Link
           href="/"
-          className="flex items-center gap-1.5 text-xs font-semibold text-[#111827] hover:text-[#008f51] transition-colors py-1 px-2.5 rounded-full bg-[#FAF6EE] border border-[#DECBB0]"
+          className="flex items-center gap-1.5 text-xs font-semibold text-[#111827] hover:text-[#008f51] transition-colors py-1 px-3 rounded-full bg-[#FAF6EE] border border-[#DECBB0] active:scale-95"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Store</span>
         </Link>
 
+        {/* Brand Center */}
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-[#008f51] rounded-lg flex items-center justify-center font-bold text-white text-xs shadow-xs">
+          <div className="w-7 h-7 bg-gradient-to-br from-[#008f51] to-[#05a862] rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-xs border border-white/20">
             U
           </div>
-          <div className="text-right">
-            <span className="block text-[11px] font-bold text-[#111827] leading-none">UCLEAN NERUL</span>
-            <span className="text-[9.5px] font-medium text-[#008f51]">Doorstep Pickup</span>
+          <div className="text-left leading-none">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-black text-[#111827] tracking-tight">UCLEAN</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#008f51] animate-pulse" />
+            </div>
+            <span className="text-[9.5px] font-semibold text-[#008f51]">Nerul West Store</span>
           </div>
         </div>
 
+        {/* Store Dial */}
         <a
           href="tel:+917400474132"
-          className="flex items-center gap-1 text-[11px] font-bold text-[#008f51] bg-[#eaf8f1] border border-[#a7f3d0] px-2.5 py-1 rounded-full hover:bg-[#008f51] hover:text-white transition-colors"
+          className="flex items-center gap-1 text-[11px] font-bold text-[#008f51] bg-[#eaf8f1] border border-[#a7f3d0] px-3 py-1 rounded-full hover:bg-[#008f51] hover:text-white transition-all active:scale-95 shadow-2xs"
         >
           <Phone className="w-3 h-3" />
-          <span>Call Store</span>
+          <span>Hotline</span>
         </a>
-      </div>
+      </header>
 
-      <div className="p-4 sm:p-5 max-w-xl mx-auto w-full">
+      <div className="p-3 sm:p-4 max-w-xl mx-auto w-full space-y-3">
         {bookingId ? (
-          /* Confirmation State */
-          <div className="bg-white rounded-2xl border border-[#DECBB0] p-6 text-center shadow-sm space-y-5 animate-in fade-in duration-300">
-            <div className="w-16 h-16 bg-[#eaf8f1] rounded-full flex items-center justify-center mx-auto border-2 border-[#008f51] text-[#008f51]">
-              <CheckCircle className="w-10 h-10" />
+          /* Professional Confirmation View */
+          <div className="bg-white rounded-[22px] border border-[#DECBB0] p-5 sm:p-6 text-center shadow-xs space-y-4 animate-in fade-in duration-300">
+            <div className="w-14 h-14 bg-gradient-to-br from-[#eaf8f1] to-[#d1fae5] rounded-2xl flex items-center justify-center mx-auto border border-[#008f51] text-[#008f51] shadow-xs">
+              <CheckCircle className="w-8 h-8" />
             </div>
 
             <div>
-              <span className="inline-block text-[10px] font-extrabold uppercase tracking-widest text-[#008f51] bg-[#eaf8f1] px-3 py-1 rounded-full border border-[#a7f3d0] mb-2">
-                Order Registered Successfully
+              <span className="inline-block text-[9.5px] font-extrabold uppercase tracking-widest text-[#008f51] bg-[#eaf8f1] px-3 py-0.5 rounded-full border border-[#a7f3d0] mb-2">
+                Order Registered
               </span>
               <h2 className="text-xl sm:text-2xl font-bold text-[#111827]">
                 Thank you, {name}!
               </h2>
-              <p className="text-xs sm:text-sm text-[#4B5563] mt-1 leading-relaxed">
-                Your doorstep pickup request has been recorded. Our team will contact you shortly to confirm timing and pickup.
+              <p className="text-xs sm:text-[13px] text-[#4B5563] mt-1 leading-relaxed">
+                Your doorstep pickup request has been saved to the store CRM. Our manager will call or message to confirm your arrival window.
               </p>
             </div>
 
-            <div className="bg-[#FAF6EE] border border-[#DECBB0] p-3.5 rounded-xl text-xs font-semibold text-[#111827] flex items-center justify-between">
-              <span className="text-[#6B7280]">Booking Tracking ID:</span>
-              <span className="font-mono font-bold text-[#008f51] text-sm">#{bookingId}</span>
+            {/* Tracking ID with Copy Button */}
+            <div className="bg-[#FAF6EE] border border-[#DECBB0] p-3 rounded-xl flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[10.5px] text-[#6B7280] block font-medium">Tracking ID</span>
+                <span className="font-mono font-bold text-[#008f51] text-sm">#{bookingId}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyId}
+                className="flex items-center gap-1 text-[11px] font-semibold text-[#0c2b1e] bg-white border border-[#DECBB0] px-2.5 py-1 rounded-lg hover:bg-[#FAF6EE] transition-colors"
+              >
+                <Copy className="w-3 h-3 text-[#008f51]" />
+                <span>{copiedId ? 'Copied!' : 'Copy'}</span>
+              </button>
             </div>
 
-            <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 text-left text-xs space-y-2 text-[#374151]">
+            {/* Receipt Summary Breakdown */}
+            <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 text-left text-xs space-y-2 text-[#374151]">
               <div className="flex justify-between border-b border-[#F3F4F6] pb-1.5">
-                <span className="text-[#6B7280]">Services:</span>
-                <span className="font-semibold text-right max-w-[200px] truncate">{selectedServices.join(', ')}</span>
+                <span className="text-[#6B7280]">Selected Services</span>
+                <span className="font-bold text-[#111827] text-right max-w-[200px] truncate">{selectedServices.join(', ')}</span>
               </div>
               <div className="flex justify-between border-b border-[#F3F4F6] pb-1.5">
-                <span className="text-[#6B7280]">Phone:</span>
-                <span className="font-semibold">{phone}</span>
+                <span className="text-[#6B7280]">Customer Mobile</span>
+                <span className="font-semibold text-[#111827]">{phone}</span>
               </div>
               <div className="flex justify-between border-b border-[#F3F4F6] pb-1.5">
-                <span className="text-[#6B7280]">Address:</span>
-                <span className="font-semibold text-right max-w-[200px] truncate">{address}{building ? `, ${building}` : ''}</span>
+                <span className="text-[#6B7280]">Pickup Address</span>
+                <span className="font-semibold text-[#111827] text-right max-w-[200px] truncate">{address}{building ? `, ${building}` : ''}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#6B7280]">Schedule:</span>
-                <span className="font-semibold">{date || 'Earliest available'} • {time}</span>
+                <span className="text-[#6B7280]">Schedule Window</span>
+                <span className="font-semibold text-[#008f51]">{date || 'Earliest available'} • {time}</span>
               </div>
             </div>
 
-            <div className="space-y-2.5 pt-2">
+            {/* Actions */}
+            <div className="space-y-2 pt-1">
               <button
                 type="button"
                 onClick={openWhatsAppDirect}
-                className="w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all"
+                className="w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs active:scale-98 transition-all"
               >
                 <Send className="w-4 h-4" />
                 <span>Send Details via WhatsApp (Fastest Response)</span>
@@ -234,303 +264,359 @@ function OrderFormContent() {
             </div>
           </div>
         ) : (
-          /* Form Content */
-          <div className="space-y-4">
+          /* Executive Form Interface */
+          <div className="space-y-3">
             
-            {/* Header Hero Card */}
-            <div className="bg-white rounded-2xl border border-[#DECBB0] p-4 sm:p-5 shadow-xs">
-              <span className="inline-block text-[9.5px] font-extrabold tracking-widest uppercase text-[#008f51] bg-[#eaf8f1] px-2.5 py-0.5 rounded-full mb-1.5 border border-[#a7f3d0]">
-                FREE DOORSTEP PICKUP &bull; NERUL SECTOR 6
-              </span>
-              <h1 className="text-xl sm:text-2xl font-bold text-[#111827] leading-tight">
-                Schedule Your Laundry Pickup
+            {/* Header Hero Banner with Reassurance */}
+            <div className="bg-white rounded-[22px] border border-[#DECBB0] p-4 sm:p-5 shadow-2xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="inline-block text-[9px] font-extrabold tracking-widest uppercase text-[#008f51] bg-[#eaf8f1] px-2.5 py-0.5 rounded-full border border-[#a7f3d0]">
+                  DOORSTEP PICKUP &bull; NERUL SECTOR 6
+                </span>
+                <span className="text-[9.5px] font-bold text-[#632608] bg-[#FAF6EE] border border-[#DECBB0] px-2.5 py-0.5 rounded-full">
+                  ⚡ 0 Advance Fee
+                </span>
+              </div>
+              <h1 className="text-lg sm:text-[21px] font-bold text-[#111827] leading-tight">
+                Schedule Doorstep Laundry Pickup
               </h1>
-              <p className="text-xs sm:text-[13px] text-[#4B5563] mt-1 leading-relaxed">
-                Select your desired services and enter pickup details. Our store team will arrive with clean laundry bags and digital weighing scale.
+              <p className="text-[11.5px] text-[#4B5563] mt-1 leading-relaxed">
+                Choose services and share your address. Our pickup associate will arrive with sanitized bags and a digital weighing scale.
               </p>
 
-              {/* Trust Features */}
-              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#F3F4F6] text-center text-[10px] text-[#374151] font-medium">
-                <div className="flex items-center justify-center gap-1">
+              {/* 3 Executive Trust Pill Badges */}
+              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#F3F4F6] text-center text-[10px] text-[#374151] font-semibold">
+                <div className="flex items-center justify-center gap-1.5 bg-[#FAF6EE]/80 py-1.5 px-2 rounded-xl border border-[#ECE0C6]">
                   <Truck className="w-3.5 h-3.5 text-[#008f51] shrink-0" />
                   <span>Free Pickup</span>
                 </div>
-                <div className="flex items-center justify-center gap-1">
+                <div className="flex items-center justify-center gap-1.5 bg-[#FAF6EE]/80 py-1.5 px-2 rounded-xl border border-[#ECE0C6]">
                   <ShieldCheck className="w-3.5 h-3.5 text-[#008f51] shrink-0" />
-                  <span>Zero Damage</span>
+                  <span>Fabric Safety</span>
                 </div>
-                <div className="flex items-center justify-center gap-1">
+                <div className="flex items-center justify-center gap-1.5 bg-[#FAF6EE]/80 py-1.5 px-2 rounded-xl border border-[#ECE0C6]">
                   <Clock className="w-3.5 h-3.5 text-[#008f51] shrink-0" />
                   <span>24-48h Delivery</span>
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="space-y-4">
+            <form onSubmit={handleFormSubmit} className="space-y-3">
               
-              {/* Section 1: Services Selection */}
-              <div className="bg-white rounded-2xl border border-[#DECBB0] p-4 sm:p-5 shadow-xs space-y-3">
+              {/* Step 1: Services Selection (2 Columns on Mobile with High Polish) */}
+              <div className="bg-white rounded-[22px] border border-[#DECBB0] p-4 sm:p-5 shadow-2xs space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs sm:text-[13px] font-bold text-[#111827]">
-                    1. Select Service(s) *
-                  </label>
-                  <span className="text-[11px] font-medium text-[#008f51]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#008f51] text-white text-[10px] font-black flex items-center justify-center">
+                      1
+                    </span>
+                    <span className="text-[13px] font-bold text-[#111827]">
+                      Choose Service(s) <span className="text-red-500">*</span>
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#008f51] bg-[#eaf8f1] px-2 py-0.5 rounded-full border border-[#a7f3d0]">
                     {selectedServices.length} selected
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {AVAILABLE_SERVICES.map((srv) => {
                     const isChecked = selectedServices.includes(srv.id);
                     return (
                       <label
                         key={srv.id}
                         onClick={() => toggleService(srv.id)}
-                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                        className={`relative flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
                           isChecked
-                            ? 'bg-[#eaf8f1] border-[#008f51] shadow-xs'
-                            : 'bg-[#FAF6EE] border-[#DECBB0] hover:bg-[#f3ebd9]'
+                            ? 'bg-[#eaf8f1]/70 border-[#008f51] ring-1.5 ring-[#008f51] shadow-2xs'
+                            : 'bg-[#FAF6EE]/60 border-[#DECBB0] hover:bg-[#FAF6EE] hover:border-[#008f51]/40'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}}
-                          className="mt-0.5 w-4 h-4 rounded text-[#008f51] accent-[#008f51] focus:ring-[#008f51] cursor-pointer"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-xs font-bold text-[#111827] truncate">
+                        <div className="min-w-0 pr-1 flex items-center gap-1.5">
+                          <span className="text-sm shrink-0">{srv.icon}</span>
+                          <div className="min-w-0">
+                            <span className="block text-[11px] sm:text-[12px] font-bold text-[#111827] truncate leading-tight">
                               {srv.name}
                             </span>
-                            <span className="text-[11px] font-extrabold text-[#00874c] shrink-0">
+                            <span className="text-[10px] font-extrabold text-[#00874c]">
                               {srv.rate}
                             </span>
                           </div>
-                          <p className="text-[11px] text-[#4B5563] mt-0.5 leading-snug line-clamp-1">
-                            {srv.desc}
-                          </p>
+                        </div>
+
+                        <div
+                          className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                            isChecked
+                              ? 'bg-[#008f51] border-[#008f51] text-white shadow-xs'
+                              : 'bg-white border-[#DECBB0]'
+                          }`}
+                        >
+                          {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                         </div>
                       </label>
                     );
                   })}
                 </div>
 
-                {/* If custom preselected service from URL wasn't in standard list */}
+                {/* Preselected Custom Plan Banner if from URL */}
                 {selectedServices.some((s) => !AVAILABLE_SERVICES.some((a) => a.id === s)) && (
-                  <div className="bg-[#eaf8f1] border border-[#a7f3d0] rounded-xl p-2.5 text-xs text-[#072618] flex items-center justify-between">
+                  <div className="bg-[#eaf8f1] border border-[#a7f3d0] rounded-xl p-2.5 text-[11.5px] text-[#072618] flex items-center justify-between">
                     <span>Selected Plan: <strong>{selectedServices.find((s) => !AVAILABLE_SERVICES.some((a) => a.id === s))}</strong></span>
+                    <span className="text-[10px] font-bold text-[#008f51]">Configured</span>
                   </div>
                 )}
               </div>
 
-              {/* Section 2: Contact Details */}
-              <div className="bg-white rounded-2xl border border-[#DECBB0] p-4 sm:p-5 shadow-xs space-y-3">
-                <label className="text-xs sm:text-[13px] font-bold text-[#111827] block">
-                  2. Contact Details *
-                </label>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Rahul Sharma"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                      Mobile Number *
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="e.g. 98765 43210"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
-                    />
-                  </div>
+              {/* Step 2: Contact Details (2 Inputs in 1 Row on Mobile with Icons) */}
+              <div className="bg-white rounded-[22px] border border-[#DECBB0] p-4 sm:p-5 shadow-2xs space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#008f51] text-white text-[10px] font-black flex items-center justify-center">
+                    2
+                  </span>
+                  <span className="text-[13px] font-bold text-[#111827]">
+                    Contact &amp; Address Details <span className="text-red-500">*</span>
+                  </span>
                 </div>
-              </div>
 
-              {/* Section 3: Pickup Address */}
-              <div className="bg-white rounded-2xl border border-[#DECBB0] p-4 sm:p-5 shadow-xs space-y-3">
-                <label className="text-xs sm:text-[13px] font-bold text-[#111827] block">
-                  3. Pickup Address (Nerul / Navi Mumbai) *
-                </label>
-
-                <div className="space-y-3">
+                {/* 2 Inputs in 1 Row: Name & Mobile */}
+                <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                      Flat / House No. &amp; Building / Society Name
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1">
+                      Full Name <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Flat 402, Sea Breeze Apts, Sector 6"
-                      value={building}
-                      onChange={(e) => setBuilding(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                        Street Address &amp; Nearest Landmark *
-                      </label>
+                    <div className="relative">
+                      <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Near D-Mart, Sector 6, Nerul West"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
+                        placeholder="e.g. Rahul Sharma"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                       />
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                        PIN Code *
-                      </label>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1">
+                      Mobile Number <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+                      <input
+                        type="tel"
+                        required
+                        placeholder="10-digit number"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address: Flat & PIN in 1 Row */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1 truncate">
+                      Flat / Building (Optional)
+                    </label>
+                    <div className="relative">
+                      <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+                      <input
+                        type="text"
+                        placeholder="Flat 402, Sea Breeze"
+                        value={building}
+                        onChange={(e) => setBuilding(e.target.value)}
+                        className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1">
+                      PIN Code <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
                       <input
                         type="text"
                         required
                         value={pin}
                         onChange={(e) => setPin(e.target.value)}
                         placeholder="400706"
-                        className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
+                        className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                       />
                     </div>
                   </div>
                 </div>
+
+                {/* Street Address & Landmark */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#374151] mb-1">
+                    Street Address &amp; Landmark <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Sector 6, Near D-Mart, Nerul West"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Section 4: Schedule & Preferences */}
-              <div className="bg-white rounded-2xl border border-[#DECBB0] p-4 sm:p-5 shadow-xs space-y-3">
-                <label className="text-xs sm:text-[13px] font-bold text-[#111827] block">
-                  4. Schedule &amp; Preferences
-                </label>
+              {/* Step 3: Schedule, Garments & Preferences */}
+              <div className="bg-white rounded-[22px] border border-[#DECBB0] p-4 sm:p-5 shadow-2xs space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#008f51] text-white text-[10px] font-black flex items-center justify-center">
+                    3
+                  </span>
+                  <span className="text-[13px] font-bold text-[#111827]">
+                    Pickup Schedule &amp; Preferences
+                  </span>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Date & Time Slot (2 Inputs in 1 Row) */}
+                <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                      Preferred Pickup Date
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1 truncate">
+                      Pickup Date
                     </label>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
-                    />
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        className="w-full h-10 pl-8 pr-2 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12px] text-[#111827] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                      Preferred Time Slot
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1 truncate">
+                      Preferred Slot
                     </label>
-                    <select
-                      value={time}
-                      onChange={(e) => setTime(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
-                    >
-                      <option value="Morning (9 AM - 12 PM)">Morning (9 AM - 12 PM)</option>
-                      <option value="Afternoon (12 PM - 4 PM)">Afternoon (12 PM - 4 PM)</option>
-                      <option value="Evening (4 PM - 8 PM)">Evening (4 PM - 8 PM)</option>
-                      <option value="Flexible / Call Before Arrival">Flexible / Call Before Arrival</option>
-                    </select>
+                    <div className="relative">
+                      <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+                      <select
+                        value={time}
+                        onChange={(e) => setTime(e.target.value)}
+                        className="w-full h-10 pl-8 pr-2 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[11.5px] text-[#111827] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                      >
+                        <option value="Morning (9 AM - 12 PM)">Morning (9 - 12)</option>
+                        <option value="Afternoon (12 PM - 4 PM)">Afternoon (12 - 4)</option>
+                        <option value="Evening (4 PM - 8 PM)">Evening (4 - 8)</option>
+                        <option value="Flexible / Call Before">Flexible Slot</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Garments Note & Approx Qty (2 Inputs in 1 Row) */}
+                <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                      Garments / Items Description (Optional)
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1 truncate">
+                      Garments (Optional)
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 5 shirts, 2 blazers, 1 curtain set"
-                      value={items}
-                      onChange={(e) => setItems(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
-                    />
+                    <div className="relative">
+                      <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+                      <input
+                        type="text"
+                        placeholder="e.g. 5 shirts, 2 suits"
+                        value={items}
+                        onChange={(e) => setItems(e.target.value)}
+                        className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                      Estimated Weight or Count (Optional)
+                    <label className="block text-[11px] font-semibold text-[#374151] mb-1 truncate">
+                      Approx. Qty (Optional)
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. ~4-5 kg or ~10 pieces"
+                      placeholder="e.g. ~4-5 kg or 8 pcs"
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
-                      className="w-full h-10 px-3 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
+                      className="w-full h-10 px-3 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                     />
                   </div>
                 </div>
 
+                {/* Special Instructions Note */}
                 <div>
-                  <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                    Special Instructions / Stains Note (Optional)
+                  <label className="block text-[11px] font-semibold text-[#374151] mb-1 truncate">
+                    Special Instructions (Optional)
                   </label>
-                  <textarea
-                    rows={2}
-                    placeholder="e.g. Ring flat doorbell, collar stain on white shirt, delicate fabric handling"
+                  <input
+                    type="text"
+                    placeholder="e.g. Ring flat bell, delicate silk care, collar stain"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full p-2.5 rounded-lg border border-[#DECBB0] bg-white text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#008f51] focus:ring-1 focus:ring-[#008f51]"
+                    className="w-full h-10 px-3 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                   />
                 </div>
 
+                {/* Confirmation Channel Switcher */}
                 <div>
-                  <label className="block text-[11.5px] font-medium text-[#4B5563] mb-1">
-                    Contact Preference for Confirmation
+                  <label className="block text-[11px] font-semibold text-[#374151] mb-1">
+                    Confirmation Preference
                   </label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 text-xs font-semibold text-[#111827] cursor-pointer">
-                      <input
-                        type="radio"
-                        name="contact_pref"
-                        checked={contact === 'WhatsApp'}
-                        onChange={() => setContact('WhatsApp')}
-                        className="accent-[#008f51]"
-                      />
-                      <span>WhatsApp Message (Recommended)</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-[#111827] cursor-pointer">
-                      <input
-                        type="radio"
-                        name="contact_pref"
-                        checked={contact === 'Phone Call'}
-                        onChange={() => setContact('Phone Call')}
-                        className="accent-[#008f51]"
-                      />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setContact('WhatsApp')}
+                      className={`py-2 px-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-center gap-2 transition-all ${
+                        contact === 'WhatsApp'
+                          ? 'bg-[#eaf8f1] border-[#008f51] text-[#008f51] ring-1 ring-[#008f51] shadow-2xs'
+                          : 'bg-[#FAF6EE]/50 border-[#DECBB0] text-[#4B5563] hover:bg-[#FAF6EE]'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-[#25D366]" />
+                      <span>WhatsApp Message</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setContact('Phone Call')}
+                      className={`py-2 px-3 rounded-xl border text-[11.5px] font-bold flex items-center justify-center gap-2 transition-all ${
+                        contact === 'Phone Call'
+                          ? 'bg-[#eaf8f1] border-[#008f51] text-[#008f51] ring-1 ring-[#008f51] shadow-2xs'
+                          : 'bg-[#FAF6EE]/50 border-[#DECBB0] text-[#4B5563] hover:bg-[#FAF6EE]'
+                      }`}
+                    >
+                      <Phone className="w-3 h-3 text-[#008f51]" />
                       <span>Phone Call</span>
-                    </label>
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Form Action Buttons */}
-              <div className="space-y-2.5 pt-1">
+              {/* Security Reassurance Callout */}
+              <div className="bg-[#eaf8f1]/60 border border-[#a7f3d0] rounded-xl p-2.5 px-3 flex items-center gap-2 text-[10.5px] text-[#072618]">
+                <ShieldCheck className="w-4 h-4 text-[#008f51] shrink-0" />
+                <span>Zero advance payment required &bull; Free digital doorstep weighing before order confirmation.</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-1">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#008f51] to-[#05a862] hover:from-[#05a862] hover:to-[#072618] text-white font-bold text-xs sm:text-sm tracking-wide shadow-md hover:shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+                  className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#008f51] to-[#05a862] hover:from-[#05a862] hover:to-[#072618] text-white font-bold text-[13px] tracking-wide shadow-md hover:shadow-lg active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
                 >
                   {loading ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4 text-[#ffe57f]" />
+                      <Sparkles className="w-3.5 h-3.5 text-[#ffe57f]" />
                       <span>CONFIRM &amp; BOOK DOORSTEP PICKUP &rarr;</span>
                     </>
                   )}
@@ -539,14 +625,14 @@ function OrderFormContent() {
                 <button
                   type="button"
                   onClick={openWhatsAppDirect}
-                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-[#FAF6EE] text-[#072618] font-semibold text-xs border border-[#DECBB0] shadow-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-[#FAF6EE] text-[#072618] font-semibold text-[11.5px] border border-[#DECBB0] shadow-2xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5 text-[#25D366]" />
-                  <span>Book Directly on WhatsApp</span>
+                  <span>Book Directly via WhatsApp</span>
                 </button>
 
-                <p className="text-[10px] text-[#6B7280] text-center pt-1">
-                  Zero advance payment required &bull; Final charges weighed &amp; billed at doorstep before processing.
+                <p className="text-[9.5px] text-[#6B7280] text-center pt-0.5">
+                  Trusted laundry &amp; dry cleaning service in Nerul, Navi Mumbai
                 </p>
               </div>
 
@@ -564,7 +650,7 @@ export default function OrderPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#FAF6EE] flex flex-col items-center justify-center p-6 text-center font-sans">
-          <div className="w-8 h-8 border-3 border-[#008f51] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-7 h-7 border-3 border-[#008f51] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
           <p className="text-xs font-bold text-[#111827]">Loading pickup order form...</p>
         </div>
       }
