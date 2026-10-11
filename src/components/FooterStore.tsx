@@ -87,9 +87,15 @@ export function FooterStore() {
       </div>
 
       {/* Footer Bottom */}
-      <div className="text-[11px] text-[#87b8a1] leading-relaxed max-w-[320px] border-t border-white/10 pt-4 w-full flex flex-col items-center gap-1">
+      <div className="text-[11px] text-[#87b8a1] leading-relaxed max-w-[320px] border-t border-white/10 pt-4 w-full flex flex-col items-center gap-1.5">
         <span>&copy; 2026 U CLEAN WE ♥ LAUNDRY. All rights reserved.</span>
         <span>Free Pickup &amp; Delivery across Sector 6 &amp; Nerul.</span>
+        <a
+          href="/admin"
+          className="mt-1 text-[10px] text-[#55fca7]/70 hover:text-[#55fca7] underline transition-colors"
+        >
+          Staff &amp; Admin Operations Portal &rarr;
+        </a>
       </div>
     </footer>
   );

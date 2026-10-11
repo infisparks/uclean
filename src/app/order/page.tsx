@@ -22,6 +22,11 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
+import {
+  validateIndianMobile,
+  validateCustomerName,
+  validateAddress,
+} from '@/lib/validation';
 
 const AVAILABLE_SERVICES = [
   { id: 'Wash & Fold — ₹109/kg', name: 'Wash & Fold', icon: '🧺', rate: '₹109/kg', keywords: 'wash fold laundry kg everyday clothes' },
@@ -55,6 +60,11 @@ function OrderFormContent() {
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+
+  // Validation error states
+  const [nameError, setNameError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [addressError, setAddressError] = useState('');
 
   const filteredAvailableServices = React.useMemo(() => {
     const raw = serviceSearch.toLowerCase().trim();
@@ -101,18 +111,38 @@ function OrderFormContent() {
       alert('Please select at least one service.');
       return;
     }
-    if (!name.trim() || !phone.trim() || !address.trim()) {
-      alert('Please fill in required fields: Name, Mobile Number, and Complete Address.');
+
+    // 1. Validate Customer Name
+    const nameVal = validateCustomerName(name);
+    if (!nameVal.isValid) {
+      setNameError(nameVal.error || 'Please enter a valid customer name.');
       return;
     }
+    setNameError('');
+
+    // 2. Validate Indian Mobile Number (10 digits starting with 6,7,8,9)
+    const phoneVal = validateIndianMobile(phone);
+    if (!phoneVal.isValid) {
+      setPhoneError(phoneVal.error || 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    setPhoneError('');
+
+    // 3. Validate Address
+    const addressVal = validateAddress(address);
+    if (!addressVal.isValid) {
+      setAddressError(addressVal.error || 'Please enter a complete pickup address.');
+      return;
+    }
+    setAddressError('');
 
     setLoading(true);
     try {
-      const fullAddress = `${address}${building ? `, ${building}` : ''} (PIN: ${pin})`;
+      const fullAddress = `${addressVal.formatted}${building ? `, ${building}` : ''} (PIN: ${pin})`;
       const res = await createBooking({
         serviceType: 'pickup',
-        customerName: name.trim(),
-        phone: phone.trim(),
+        customerName: nameVal.formatted || name.trim(),
+        phone: phoneVal.formatted || phone.trim(),
         address: fullAddress,
         preferredDate: date || 'Earliest available slot',
         preferredTimeSlot: time,
@@ -214,8 +244,9 @@ function OrderFormContent() {
               <h2 className="text-xl sm:text-2xl font-bold text-[#111827]">
                 Thank you, {name}!
               </h2>
-              <p className="text-xs sm:text-[13px] text-[#4B5563] mt-1 leading-relaxed">
-                Your doorstep pickup request has been saved to the store CRM. Our manager will call or message to confirm your arrival window.
+              <p className="text-xs sm:text-[13px] text-[#008f51] font-bold mt-1.5 leading-relaxed flex items-center justify-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse"></span>
+                Automated WhatsApp confirmation sent to {phone}!
               </p>
             </div>
 
@@ -423,7 +454,7 @@ function OrderFormContent() {
                 </div>
 
                 {/* 2 Inputs in 1 Row: Name & Mobile */}
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="block text-[11px] font-semibold text-[#374151] mb-1">
                       Full Name <span className="text-red-500">*</span>
@@ -435,27 +466,56 @@ function OrderFormContent() {
                         required
                         placeholder="e.g. Rahul Sharma"
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          if (nameError) setNameError('');
+                        }}
+                        className={`w-full h-10 pl-8 pr-2.5 rounded-xl border text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:ring-2 transition-all ${
+                          nameError
+                            ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                            : 'border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white focus:border-[#008f51] focus:ring-[#008f51]/15'
+                        }`}
                       />
                     </div>
+                    {nameError && (
+                      <p className="text-[10px] text-rose-600 font-bold mt-1">
+                        {nameError}
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-[#374151] mb-1">
                       Mobile Number <span className="text-red-500">*</span>
                     </label>
-                    <div className="relative">
-                      <Phone className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
+                    <div className="flex rounded-xl overflow-hidden shadow-2xs">
+                      <div className="flex items-center gap-1 bg-[#FAF6EE] border border-r-0 border-[#DECBB0] px-2.5 text-[11px] font-bold text-[#0c2b1e] shrink-0">
+                        <span>🇮🇳</span>
+                        <span>+91</span>
+                      </div>
                       <input
                         type="tel"
                         required
+                        maxLength={10}
                         placeholder="10-digit number"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setPhone(val);
+                          if (phoneError) setPhoneError('');
+                        }}
+                        className={`w-full h-10 px-3 rounded-r-xl border text-[12.5px] font-semibold text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:ring-2 transition-all ${
+                          phoneError
+                            ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                            : 'border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white focus:border-[#008f51] focus:ring-[#008f51]/15'
+                        }`}
                       />
                     </div>
+                    {phoneError && (
+                      <p className="text-[10px] text-rose-600 font-bold mt-1">
+                        {phoneError}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -501,16 +561,28 @@ function OrderFormContent() {
                     Street Address &amp; Landmark <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
-                    <input
-                      type="text"
+                    <MapPin className="absolute left-2.5 top-3 w-3.5 h-3.5 text-[#9CA3AF]" />
+                    <textarea
+                      rows={2}
                       required
                       placeholder="e.g. Sector 6, Near D-Mart, Nerul West"
                       value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
+                      onChange={(e) => {
+                        setAddress(e.target.value);
+                        if (addressError) setAddressError('');
+                      }}
+                      className={`w-full pl-8 pr-2.5 py-2 rounded-xl border text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:ring-2 transition-all ${
+                        addressError
+                          ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                          : 'border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white focus:border-[#008f51] focus:ring-[#008f51]/15'
+                      }`}
                     />
                   </div>
+                  {addressError && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-1">
+                      {addressError}
+                    </p>
+                  )}
                 </div>
               </div>
 

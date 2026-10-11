@@ -1,0 +1,62 @@
+[
+  {
+    "serviceType": "pickup",
+    "customerName": "aesfrgd",
+    "phone": "9960997808",
+    "address": "sdfg (PIN: 400706)",
+    "preferredDate": "Earliest available slot",
+    "preferredTimeSlot": "Morning (9 AM - 12 PM)",
+    "notes": "Services: Dry Cleaning — Men's Suits & Ethnic, Lining Curtain — ₹45/sq. ft., Wash & Fold — ₹109/kg, Wash & Iron — ₹149/kg, Home Textiles & Sofa Cleaning | Garments: Suit / Blazer / Sherwani | Approx Qty: None | Notes: None | Contact: WhatsApp",
+    "status": "new",
+    "id": "UC-31855",
+    "orderId": "UC-31855",
+    "createdAt": "2026-10-11T14:41:23.022Z",
+    "timestamp": "2026-10-11T14:41:23.022Z",
+    "platform": "web-mobile-app",
+    "locationServed": "Nerul, Sector 6, Navi Mumbai"
+  },
+  {
+    "serviceType": "pickup",
+    "customerName": "sawdefrgdthyj",
+    "phone": "8888888888888888",
+    "address": "dfghj, wedfrgth (PIN: 400706)",
+    "preferredDate": "Earliest available slot",
+    "preferredTimeSlot": "Morning (9 AM - 12 PM)",
+    "notes": "Services: Wash & Fold — ₹109/kg, Wash & Iron — ₹149/kg, Home Textiles & Sofa Cleaning, Dry Cleaning — from ₹149, Lining Curtain — ₹45/sq. ft., Shoe Spa & Cleaning | Garments: Everyday Laundry (Per Kg) | Approx Qty: dsfgh | Notes: None | Contact: WhatsApp",
+    "status": "new",
+    "id": "UC-27349",
+    "orderId": "UC-27349",
+    "createdAt": "2026-10-11T14:37:14.578Z",
+    "timestamp": "2026-10-11T14:37:14.578Z",
+    "platform": "web-mobile-app",
+    "locationServed": "Nerul, Sector 6, Navi Mumbai"
+  },
+  {
+    "serviceType": "pickup",
+    "customerName": "test 2",
+    "phone": "9960997808",
+    "address": "asfdgfh, defsgdfh (PIN: 400706)",
+    "preferredDate": "Earliest available slot",
+    "preferredTimeSlot": "Afternoon (12 PM - 4 PM)",
+    "notes": "Services: Dry Cleaning — Women's Ethnic, Wash & Iron — ₹149/kg | Garments: Silk Saree / Lehenga / Choli | Approx Qty: ef | Notes: asdf | Contact: WhatsApp",
+    "status": "new",
+    "id": "UC-31451",
+    "orderId": "UC-31451",
+    "createdAt": "2026-10-11T14:36:28.762Z",
+    "timestamp": "2026-10-11T14:36:28.762Z",
+    "platform": "web-mobile-app",
+    "locationServed": "Nerul, Sector 6, Navi Mumbai"
+  },
+  {
+    "id": "UC-26099",
+    "customerName": "Sameer Khan",
+    "phone": "9820145621",
+    "serviceType": "Wash & Steam Iron",
+    "totalEstimate": 450,
+    "address": "Flat 502, Seawoods, Sector 6, Nerul West",
+    "preferredDate": "Today",
+    "preferredTimeSlot": "02:00 PM – 04:00 PM",
+    "notes": "4 shirts, 2 pants",
+    "createdAt": "2026-10-11T14:24:55.515Z"
+  }
+]

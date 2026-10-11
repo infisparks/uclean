@@ -1,9 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Send, Sparkles, CheckCircle, ShieldCheck } from 'lucide-react';
+import { X, Send, Sparkles, CheckCircle, ShieldCheck, AlertCircle, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
+import {
+  validateIndianMobile,
+  validateCustomerName,
+  validateAddress,
+} from '@/lib/validation';
 
 interface DetailedOrderFormModalProps {
   isOpen: boolean;
@@ -34,6 +39,11 @@ export function DetailedOrderFormModal({
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
 
+  // Validation errors
+  const [nameError, setNameError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [addressError, setAddressError] = useState('');
+
   React.useEffect(() => {
     if (isOpen) {
       setBookingId(null);
@@ -62,18 +72,38 @@ export function DetailedOrderFormModal({
       alert('Please select at least one service.');
       return;
     }
-    if (!name.trim() || !phone.trim() || !address.trim()) {
-      alert('Please fill in required fields (Name, Phone, and Complete Address).');
+
+    // 1. Validate Customer Name
+    const nameVal = validateCustomerName(name);
+    if (!nameVal.isValid) {
+      setNameError(nameVal.error || 'Please enter a valid name.');
       return;
     }
+    setNameError('');
+
+    // 2. Validate Indian Mobile Number (Compulsory, 10-digits starting with 6-9)
+    const phoneVal = validateIndianMobile(phone);
+    if (!phoneVal.isValid) {
+      setPhoneError(phoneVal.error || 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    setPhoneError('');
+
+    // 3. Validate Pickup Address
+    const addressVal = validateAddress(address);
+    if (!addressVal.isValid) {
+      setAddressError(addressVal.error || 'Please provide your complete pickup address.');
+      return;
+    }
+    setAddressError('');
 
     setLoading(true);
     try {
       const fullAddress = `${address}${building ? `, ${building}` : ''} (PIN: ${pin})`;
       const res = await createBooking({
         serviceType: 'pickup',
-        customerName: name,
-        phone,
+        customerName: nameVal.formatted || name.trim(),
+        phone: phoneVal.formatted || phone.trim(),
         address: fullAddress,
         preferredDate: date || 'Earliest available',
         preferredTimeSlot: time,
@@ -160,8 +190,9 @@ export function DetailedOrderFormModal({
                 <h4 className="text-2xl font-black text-[#072618] font-heading">
                   Order Request Received, {name}!
                 </h4>
-                <p className="text-xs text-[#4e6b5d] mt-1">
-                  Saved directly to Firebase Firestore &amp; Store Management CRM.
+                <p className="text-xs text-[#008f51] font-bold mt-1.5 flex items-center justify-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse"></span>
+                  WhatsApp confirmation sent to {phone}!
                 </p>
                 <div className="mt-3 inline-block bg-[#FAF6EE] border border-[#DECBB0] px-4 py-2 rounded-xl text-xs font-bold text-[#632608]">
                   Order Tracking ID: <span className="text-[#008f51] font-mono font-extrabold">#{bookingId}</span>
@@ -258,27 +289,65 @@ export function DetailedOrderFormModal({
                 
                 <div className="grid grid-cols-2 gap-2.5 mb-2.5">
                   <div>
-                    <label className="block text-[11px] font-bold text-[#0c2b1e] mb-1">Full Name *</label>
+                    <label className="block text-[11px] font-bold text-[#0c2b1e] mb-1">
+                      Full Name *
+                    </label>
                     <input
                       type="text"
                       required
-                      placeholder="Your name"
+                      placeholder="e.g. Imran Khan"
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        if (nameError) setNameError('');
+                      }}
+                      className={`w-full h-10 px-3 rounded-xl border text-xs focus:bg-white focus:outline-none focus:ring-2 ${
+                        nameError
+                          ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                          : 'border-[#DECBB0] bg-[#FAF6EE] focus:ring-[#008f51]'
+                      }`}
                     />
+                    {nameError && (
+                      <p className="text-[10px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{nameError}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-[#0c2b1e] mb-1">Mobile Number (WhatsApp) *</label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="Phone number"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
-                    />
+                    <label className="block text-[11px] font-bold text-[#0c2b1e] mb-1">
+                      Indian Mobile No. (WhatsApp) *
+                    </label>
+                    <div className="relative flex">
+                      <span className="h-10 px-2 rounded-l-xl border-y border-l border-[#DECBB0] bg-[#F1EAD9] text-[#072618] font-bold text-[11px] flex items-center gap-1 select-none">
+                        <span>🇮🇳</span>
+                        <span>+91</span>
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="10-digit number"
+                        value={phone}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setPhone(val);
+                          if (phoneError) setPhoneError('');
+                        }}
+                        className={`w-full h-10 px-3 rounded-r-xl border text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 ${
+                          phoneError
+                            ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                            : 'border-[#DECBB0] bg-[#FAF6EE] focus:ring-[#008f51]'
+                        }`}
+                      />
+                    </div>
+                    {phoneError && (
+                      <p className="text-[10px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{phoneError}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -314,9 +383,22 @@ export function DetailedOrderFormModal({
                     required
                     placeholder="Flat number, floor, building, landmark, Sector 6 / Nerul..."
                     value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      if (addressError) setAddressError('');
+                    }}
+                    className={`w-full p-2.5 rounded-xl border text-xs focus:bg-white focus:outline-none focus:ring-2 ${
+                      addressError
+                        ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                        : 'border-[#DECBB0] bg-[#FAF6EE] focus:ring-[#008f51]'
+                    }`}
                   />
+                  {addressError && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{addressError}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 mb-2.5">

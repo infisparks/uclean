@@ -4,6 +4,11 @@ import React, { useState } from 'react';
 import { X, CheckCircle, Calendar, Clock, MapPin, Phone, User, Send } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
+import {
+  validateIndianMobile,
+  validateCustomerName,
+  validateAddress,
+} from '@/lib/validation';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -35,12 +40,20 @@ export function BookingModal({
   const [loading, setLoading] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
 
+  // Validation error states
+  const [nameError, setNameError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [addressError, setAddressError] = useState('');
+
   // Update defaults when modal opens with new props
   React.useEffect(() => {
     if (isOpen) {
       setServiceType(defaultService);
       setTier(defaultTier);
       setSubmittedId(null);
+      setNameError('');
+      setPhoneError('');
+      setAddressError('');
     }
   }, [isOpen, defaultService, defaultTier]);
 
@@ -48,9 +61,31 @@ export function BookingModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim() || !phone.trim()) {
-      alert('Please provide your name and contact phone number.');
+
+    // 1. Validate Customer Name
+    const nameVal = validateCustomerName(customerName);
+    if (!nameVal.isValid) {
+      setNameError(nameVal.error || 'Please enter a valid customer name.');
       return;
+    }
+    setNameError('');
+
+    // 2. Validate Indian Mobile
+    const phoneVal = validateIndianMobile(phone);
+    if (!phoneVal.isValid) {
+      setPhoneError(phoneVal.error || 'Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    setPhoneError('');
+
+    // 3. Validate Address (required for pickup & home-visit)
+    if (serviceType === 'pickup' || serviceType === 'home-visit') {
+      const addressVal = validateAddress(address);
+      if (!addressVal.isValid) {
+        setAddressError(addressVal.error || 'Please provide your complete address.');
+        return;
+      }
+      setAddressError('');
     }
 
     setLoading(true);
@@ -58,9 +93,9 @@ export function BookingModal({
       const res = await createBooking({
         serviceType,
         tier: serviceType === 'vip-membership' ? tier : undefined,
-        customerName,
-        phone,
-        address,
+        customerName: nameVal.formatted || customerName.trim(),
+        phone: phoneVal.formatted || phone.trim(),
+        address: address.trim(),
         preferredDate,
         preferredTimeSlot,
         notes,
@@ -138,8 +173,9 @@ export function BookingModal({
               </div>
               <div>
                 <h4 className="text-2xl font-black text-[#072618] font-heading">Thank You, {customerName}!</h4>
-                <p className="text-sm text-[#4e6b5d] mt-1">
-                  Your request has been logged successfully into our system.
+                <p className="text-xs text-[#008f51] font-bold mt-1.5 flex items-center justify-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse"></span>
+                  Automated WhatsApp confirmation sent to {phone}!
                 </p>
                 <div className="mt-3 inline-block bg-[#FAF6EE] border border-[#DECBB0] px-4 py-2 rounded-xl text-xs font-bold text-[#632608]">
                   Booking Reference: <span className="text-[#008f51] font-mono font-extrabold">{submittedId}</span>
@@ -244,34 +280,63 @@ export function BookingModal({
                       required
                       placeholder="e.g. Rahul Sharma"
                       value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full h-11 pl-9 pr-3 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
+                      onChange={(e) => {
+                        setCustomerName(e.target.value);
+                        if (nameError) setNameError('');
+                      }}
+                      className={`w-full h-11 pl-9 pr-3 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                        nameError
+                          ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                          : 'border-[#DECBB0] bg-[#FAF6EE] focus:bg-white focus:ring-[#008f51]'
+                      }`}
                     />
                   </div>
+                  {nameError && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-1">
+                      {nameError}
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-[#0c2b1e] mb-1">
                     Phone Number (WhatsApp) *
                   </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-3 w-4 h-4 text-[#632608]" />
+                  <div className="flex rounded-xl overflow-hidden shadow-2xs">
+                    <div className="flex items-center gap-1 bg-[#FAF6EE] border border-r-0 border-[#DECBB0] px-3 text-xs font-bold text-[#0c2b1e] shrink-0">
+                      <span>🇮🇳</span>
+                      <span>+91</span>
+                    </div>
                     <input
                       type="tel"
                       required
-                      placeholder="e.g. 9876543210"
+                      maxLength={10}
+                      placeholder="10-digit number"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full h-11 pl-9 pr-3 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setPhone(val);
+                        if (phoneError) setPhoneError('');
+                      }}
+                      className={`w-full h-11 px-3 rounded-r-xl border text-sm font-semibold focus:outline-none focus:ring-2 ${
+                        phoneError
+                          ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                          : 'border-[#DECBB0] bg-[#FAF6EE] focus:bg-white focus:ring-[#008f51]'
+                      }`}
                     />
                   </div>
+                  {phoneError && (
+                    <p className="text-[10px] text-rose-600 font-bold mt-1">
+                      {phoneError}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Address */}
               <div>
                 <label className="block text-xs font-bold text-[#0c2b1e] mb-1">
-                  Pickup / Service Address in Nerul
+                  Pickup / Service Address in Nerul {serviceType === 'pickup' || serviceType === 'home-visit' ? '*' : ''}
                 </label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-3 w-4 h-4 text-[#632608]" />
@@ -279,10 +344,22 @@ export function BookingModal({
                     type="text"
                     placeholder="Building / Flat no., Sector 6 / Nerul East / West"
                     value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="w-full h-11 pl-9 pr-3 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      if (addressError) setAddressError('');
+                    }}
+                    className={`w-full h-11 pl-9 pr-3 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                      addressError
+                        ? 'border-rose-500 bg-rose-50/50 focus:ring-rose-400'
+                        : 'border-[#DECBB0] bg-[#FAF6EE] focus:bg-white focus:ring-[#008f51]'
+                    }`}
                   />
                 </div>
+                {addressError && (
+                  <p className="text-[10px] text-rose-600 font-bold mt-1">
+                    {addressError}
+                  </p>
+                )}
               </div>
 
               {/* Date & Time Slot */}

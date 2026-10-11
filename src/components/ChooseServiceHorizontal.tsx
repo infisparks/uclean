@@ -11,6 +11,25 @@ interface ChooseServiceGridProps {
   onSearch?: (query: string) => void;
 }
 
+function CardImage({ src, alt }: { src: string; alt: string }) {
+  const [currentSrc, setCurrentSrc] = useState(src);
+
+  return (
+    <Image
+      src={currentSrc}
+      alt={alt}
+      fill
+      unoptimized={true}
+      sizes="(max-width: 480px) 50vw, 240px"
+      className="object-cover object-center group-hover:scale-105 transition-transform duration-500"
+      onError={() => {
+        // High quality fallback if local image has issues or cache glitch
+        setCurrentSrc('https://images.unsplash.com/photo-1607522370275-f14206abe5d3?auto=format&fit=crop&w=600&q=80');
+      }}
+    />
+  );
+}
+
 export function ChooseServiceHorizontal({
   onSelectService,
   onCheckGarmentPrice,
@@ -270,15 +289,12 @@ export function ChooseServiceHorizontal({
             onClick={srv.action}
             className="bg-white rounded-[18px] border border-[#DECBB0] hover:border-[#008f51] overflow-hidden flex flex-col justify-between shadow-2xs hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer group"
           >
+
             {/* Flush Photo Fit */}
             <div className="relative w-full aspect-[4/3] bg-[#f6f4ee]">
-              <Image
+              <CardImage
                 src={srv.image}
                 alt={srv.title}
-                fill
-                unoptimized={true}
-                sizes="(max-width: 480px) 50vw, 240px"
-                className="object-cover object-center group-hover:scale-105 transition-transform duration-500"
               />
             </div>
 
