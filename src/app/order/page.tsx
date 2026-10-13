@@ -193,7 +193,7 @@ function OrderFormContent() {
   };
 
   return (
-    <div className="app-container min-h-screen bg-[#FAF6EE] relative flex flex-col pb-12 font-sans antialiased">
+    <div className="app-container min-h-screen bg-[#FAF6EE] relative flex flex-col pb-12 font-light antialiased">
       
       {/* 1. Executive Top Header Bar */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#DECBB0] px-4 py-3 flex items-center justify-between shadow-2xs">
@@ -762,9 +762,9 @@ export default function OrderPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#FAF6EE] flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="min-h-screen bg-[#FAF6EE] flex flex-col items-center justify-center p-6 text-center font-light">
           <div className="w-7 h-7 border-3 border-[#008f51] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-xs font-bold text-[#111827]">Loading pickup order form...</p>
+          <p className="text-xs font-semibold text-[#111827]">Loading pickup order form...</p>
         </div>
       }
     >

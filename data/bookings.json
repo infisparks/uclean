@@ -1,6 +1,22 @@
 [
   {
     "serviceType": "pickup",
+    "customerName": "mudassir",
+    "phone": "9958399157",
+    "address": "mumbai, mumbai (PIN: 400706)",
+    "preferredDate": "20022-02-12",
+    "preferredTimeSlot": "Morning (9 AM - 12 PM)",
+    "notes": "Services: Dry Cleaning — Men's Suits & Ethnic, Wash & Fold — ₹109/kg | Garments: Suit / Blazer / Sherwani | Approx Qty: 12 | Notes: 2 | Contact: WhatsApp",
+    "status": "new",
+    "id": "UC-29816",
+    "orderId": "UC-29816",
+    "createdAt": "2026-10-13T08:15:30.741Z",
+    "timestamp": "2026-10-13T08:15:30.741Z",
+    "platform": "web-mobile-app",
+    "locationServed": "Nerul, Sector 6, Navi Mumbai"
+  },
+  {
+    "serviceType": "pickup",
     "customerName": "aesfrgd",
     "phone": "9960997808",
     "address": "sdfg (PIN: 400706)",
