@@ -24,10 +24,15 @@ import {
   FileText,
   PhoneCall,
   Check,
-  Minimize2,
-  Maximize2,
   Copy,
   ExternalLink,
+  RefreshCw,
+  SlidersHorizontal,
+  Navigation,
+  ClipboardCheck,
+  CheckCheck,
+  Layers,
+  ShoppingBag,
 } from 'lucide-react';
 import {
   sendWhatsAppMessage,
@@ -59,9 +64,12 @@ export interface CrmOrder {
     | 'Call Confirmed'
     | 'Pickup Assigned'
     | 'Picked Up'
+    | 'At Store / Inspection'
     | 'Quotation Sent'
     | 'Cleaning In Progress'
+    | 'Quality Check'
     | 'Ready for Delivery'
+    | 'Out for Delivery'
     | 'Delivered'
     | 'Cancelled'
     | string;
@@ -173,38 +181,51 @@ const INITIAL_DEMO_ORDERS: CrmOrder[] = [
   },
 ];
 
-const STATUS_LIST = [
-  'New Request',
-  'Call Confirmed',
-  'Pickup Assigned',
-  'Picked Up',
-  'At Store / Inspection',
-  'Quotation Sent',
-  'Cleaning In Progress',
-  'Quality Check',
-  'Ready for Delivery',
-  'Out for Delivery',
-  'Delivered',
-  'Cancelled',
+const ORDER_LIFECYCLE_STEPS = [
+  { key: 'New Request', label: '1. Request', short: 'Request' },
+  { key: 'Call Confirmed', label: '2. Confirmed', short: 'Confirmed' },
+  { key: 'Picked Up', label: '3. Picked Up', short: 'Pickup' },
+  { key: 'At Store / Inspection', label: '4. In Store', short: 'In Store' },
+  { key: 'Cleaning In Progress', label: '5. Cleaning', short: 'Cleaning' },
+  { key: 'Ready for Delivery', label: '6. Ready', short: 'Ready' },
+  { key: 'Delivered', label: '7. Delivered', short: 'Delivered' },
+];
+
+const STATUS_GROUPS = [
+  {
+    group: 'Intake & Verification',
+    description: 'Booking arrival & rider dispatch',
+    statuses: ['New Request', 'Call Confirmed', 'Pickup Assigned'],
+  },
+  {
+    group: 'Workshop & Cleaning',
+    description: 'Inspection, quote & wash processing',
+    statuses: ['Picked Up', 'At Store / Inspection', 'Quotation Sent', 'Cleaning In Progress', 'Quality Check'],
+  },
+  {
+    group: 'Fulfillment & Close',
+    description: 'Dispatch, completion & resolution',
+    statuses: ['Ready for Delivery', 'Out for Delivery', 'Delivered', 'Cancelled'],
+  },
 ];
 
 export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
   const [orders, setOrders] = useState<CrmOrder[]>(INITIAL_DEMO_ORDERS);
   const [selectedId, setSelectedId] = useState<string>(INITIAL_DEMO_ORDERS[0].id);
   const [search, setSearch] = useState('');
-  const [activeNav, setActiveNav] = useState<'all' | 'calls' | 'pickups' | 'quotes' | 'ready'>('all');
+  const [activeNav, setActiveNav] = useState<'all' | 'calls' | 'pickups' | 'quotes' | 'ready' | 'delivered'>('all');
+  const [sortOption, setSortOption] = useState<'newest' | 'oldest' | 'amount_high' | 'amount_low'>('newest');
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // WhatsApp popup drawer state
+  // WhatsApp drawer state
   const [isWaOpen, setIsWaOpen] = useState(false);
   const [waInputMessage, setWaInputMessage] = useState('');
   const [sendingWa, setSendingWa] = useState(false);
   const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>({});
-
-  // Quote input within WhatsApp popup
   const [quoteAmount, setQuoteAmount] = useState('450');
 
-  // Manual new order modal
+  // Manual new order modal state
   const [newOrderModalOpen, setNewOrderModalOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
@@ -219,10 +240,18 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
 
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMsg({ text, type });
-    setTimeout(() => setToastMsg(null), 4000);
+    setTimeout(() => setToastMsg(null), 3500);
   };
 
-  // Fetch bookings from server-side API & LocalStorage & Firestore
+  const copyToClipboard = (text: string, label: string) => {
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+    setCopiedItem(label);
+    showToast(`Copied ${label} to clipboard`, 'info');
+    setTimeout(() => setCopiedItem(null), 2000);
+  };
+
+  // Sync bookings from API & Firebase RTDB & LocalStorage
   useEffect(() => {
     let isMounted = true;
 
@@ -259,18 +288,15 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
           }
         }
       } catch (err) {
-        console.warn('Server bookings API poll note:', err);
+        console.warn('API sync warning:', err);
       }
     };
 
-    // 1. Initial fetch
     fetchServerBookings();
     loadLocalCache();
 
-    // 2. Poll server every 3 seconds for live order sync across all devices
-    const intervalId = setInterval(fetchServerBookings, 3000);
+    const intervalId = setInterval(fetchServerBookings, 4000);
 
-    // 3. Live Firebase Realtime Database WebSocket listener
     let unsubscribeRtdb = () => {};
     try {
       const bookingsRef = ref(rtdb, 'bookings');
@@ -310,9 +336,7 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
             }
           }
         },
-        (err) => {
-          console.warn('Realtime Database listen warning:', err);
-        }
+        (err) => console.warn('RTDB listen warning:', err)
       );
     } catch (e) {
       console.warn('RTDB setup notice:', e);
@@ -349,7 +373,7 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
           }
         }
       } catch (e) {
-        console.warn('Local cache read error:', e);
+        console.warn('Local cache read note:', e);
       }
     }
 
@@ -373,37 +397,39 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
     return orders.find((o) => o.id === selectedId) || orders[0] || INITIAL_DEMO_ORDERS[0];
   }, [orders, selectedId]);
 
-  // Operational Calculations (Aaj kitne logon ka pickup karna hai, kitnon se baat karna hai)
+  // Operational KPI Counters based on business psychology
   const opsCounters = useMemo(() => {
-    // 1. Baat karna hai (New requests pending phone verification)
+    // 1. Calls Pending (Attention - Amber)
     const callsPending = orders.filter((o) => o.status === 'New Request' || !o.callDone);
 
-    // 2. Aaj kitne logon ka pickup karna hai
+    // 2. Today's Pickups (Logistics - Blue)
     const pickupsToday = orders.filter(
       (o) =>
         (o.slot.toLowerCase().includes('today') || o.date?.toLowerCase().includes('today')) &&
         ['New Request', 'Call Confirmed', 'Pickup Assigned'].includes(o.status)
     );
 
-    // 3. Quotes pending
-    const quotesPending = orders.filter((o) => ['Picked Up', 'At Store / Inspection'].includes(o.status));
+    // 3. Quotes Pending (Valuation - Purple)
+    const quotesPending = orders.filter((o) => ['Picked Up', 'At Store / Inspection', 'Quotation Sent'].includes(o.status));
 
-    // 4. Ready for delivery
-    const readyForDelivery = orders.filter((o) => o.status === 'Ready for Delivery');
+    // 4. Ready for Delivery (Fulfillment - Emerald)
+    const readyForDelivery = orders.filter((o) => o.status === 'Ready for Delivery' || o.status === 'Out for Delivery');
+
+    // 5. Total Active Pipeline
+    const activePipeline = orders.filter((o) => o.status !== 'Delivered' && o.status !== 'Cancelled');
 
     return {
       callsPendingCount: callsPending.length,
-      callsPendingList: callsPending,
       pickupsTodayCount: pickupsToday.length,
-      pickupsTodayList: pickupsToday,
       quotesPendingCount: quotesPending.length,
       readyDeliveryCount: readyForDelivery.length,
+      activePipelineCount: activePipeline.length,
     };
   }, [orders]);
 
-  // Filtered orders list based on active tab & search
+  // Filtered & Sorted orders list
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
+    const list = orders.filter((o) => {
       const q = search.toLowerCase().trim();
       const matchQuery =
         !q ||
@@ -428,11 +454,136 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
         return ['Picked Up', 'At Store / Inspection', 'Quotation Sent'].includes(o.status);
       }
       if (activeNav === 'ready') {
-        return o.status === 'Ready for Delivery';
+        return o.status === 'Ready for Delivery' || o.status === 'Out for Delivery';
+      }
+      if (activeNav === 'delivered') {
+        return o.status === 'Delivered';
       }
       return true;
     });
-  }, [orders, search, activeNav]);
+
+    // Sorting
+    return list.sort((a, b) => {
+      if (sortOption === 'amount_high') {
+        const valA = parseFloat(a.total.replace(/[^\d.]/g, '')) || 0;
+        const valB = parseFloat(b.total.replace(/[^\d.]/g, '')) || 0;
+        return valB - valA;
+      }
+      if (sortOption === 'amount_low') {
+        const valA = parseFloat(a.total.replace(/[^\d.]/g, '')) || 0;
+        const valB = parseFloat(b.total.replace(/[^\d.]/g, '')) || 0;
+        return valA - valB;
+      }
+      if (sortOption === 'oldest') {
+        return a.id.localeCompare(b.id);
+      }
+      // default newest
+      return b.id.localeCompare(a.id);
+    });
+  }, [orders, search, activeNav, sortOption]);
+
+  // Color Psychology Badges
+  // Amber: Attention / Pending confirmation (non-alarming alertness)
+  // Blue/Indigo: Verified, scheduled, logistics in motion (trust, order)
+  // Purple/Violet: Value appraisal, quotation, inspection (quality, precision)
+  // Cyan/Teal: Cleaning, washing, steam sanitizing (hygiene, freshness)
+  // Emerald: Completed, ready for handoff, delivered (success, reliability)
+  // Rose: Cancelled, refund, alert (critical caution)
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'New Request':
+        return {
+          pillBg: 'bg-amber-50 text-amber-800 border-amber-200/90',
+          dot: 'bg-amber-500',
+          accent: 'border-l-amber-500',
+          description: 'Awaiting phone confirmation from store',
+        };
+      case 'Call Confirmed':
+        return {
+          pillBg: 'bg-blue-50 text-blue-800 border-blue-200/90',
+          dot: 'bg-blue-600',
+          accent: 'border-l-blue-600',
+          description: 'Customer reached · Pickup slot locked',
+        };
+      case 'Pickup Assigned':
+        return {
+          pillBg: 'bg-indigo-50 text-indigo-800 border-indigo-200/90',
+          dot: 'bg-indigo-600',
+          accent: 'border-l-indigo-600',
+          description: 'Rider assigned for doorstep pickup',
+        };
+      case 'Picked Up':
+        return {
+          pillBg: 'bg-purple-50 text-purple-800 border-purple-200/90',
+          dot: 'bg-purple-600',
+          accent: 'border-l-purple-600',
+          description: 'Garments safely collected from customer',
+        };
+      case 'At Store / Inspection':
+        return {
+          pillBg: 'bg-violet-50 text-violet-800 border-violet-200/90',
+          dot: 'bg-violet-600',
+          accent: 'border-l-violet-600',
+          description: 'Weighing, stain inspection & fabric tagging',
+        };
+      case 'Quotation Sent':
+        return {
+          pillBg: 'bg-sky-50 text-sky-800 border-sky-200/90',
+          dot: 'bg-sky-600',
+          accent: 'border-l-sky-600',
+          description: 'Price estimate sent to customer WhatsApp',
+        };
+      case 'Cleaning In Progress':
+        return {
+          pillBg: 'bg-teal-50 text-teal-800 border-teal-200/90',
+          dot: 'bg-teal-600',
+          accent: 'border-l-teal-600',
+          description: 'Undergoing eco-wash / hydro-iron / dry cleaning',
+        };
+      case 'Quality Check':
+        return {
+          pillBg: 'bg-cyan-50 text-cyan-800 border-cyan-200/90',
+          dot: 'bg-cyan-600',
+          accent: 'border-l-cyan-600',
+          description: 'Steam finish & packaging inspection',
+        };
+      case 'Ready for Delivery':
+        return {
+          pillBg: 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold',
+          dot: 'bg-emerald-600 animate-pulse',
+          accent: 'border-l-emerald-600',
+          description: 'Packaged & ready for doorstep delivery',
+        };
+      case 'Out for Delivery':
+        return {
+          pillBg: 'bg-emerald-50 text-emerald-900 border-emerald-400',
+          dot: 'bg-emerald-700',
+          accent: 'border-l-emerald-700',
+          description: 'Rider en-route with clean garments',
+        };
+      case 'Delivered':
+        return {
+          pillBg: 'bg-slate-100 text-slate-800 border-slate-300 font-semibold',
+          dot: 'bg-slate-600',
+          accent: 'border-l-slate-400',
+          description: 'Handed over to customer · Order closed',
+        };
+      case 'Cancelled':
+        return {
+          pillBg: 'bg-rose-50 text-rose-800 border-rose-200/90',
+          dot: 'bg-rose-600',
+          accent: 'border-l-rose-600',
+          description: 'Cancelled by customer or store staff',
+        };
+      default:
+        return {
+          pillBg: 'bg-slate-50 text-slate-700 border-slate-200',
+          dot: 'bg-slate-500',
+          accent: 'border-l-slate-400',
+          description: 'Standard order status',
+        };
+    }
+  };
 
   // Status Changer
   const handleStatusChange = async (newStatus: string) => {
@@ -454,27 +605,27 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
       // Local fallback
     }
 
-    showToast(`Order #${selectedOrder.id} status updated to "${newStatus}"`, 'info');
+    showToast(`Order #${selectedOrder.id} status moved to "${newStatus}"`, 'info');
   };
 
-  // Mark Call Done
+  // Quick Action: Mark Call Done
   const handleMarkCallDone = () => {
     setOrders((prev) =>
       prev.map((o) => (o.id === selectedOrder.id ? { ...o, callDone: true, status: 'Call Confirmed' } : o))
     );
-    showToast(`Call verified with ${selectedOrder.name}! Status: Call Confirmed.`, 'success');
+    showToast(`Call confirmed with ${selectedOrder.name}!`, 'success');
   };
 
-  // Mark Pickup Done
+  // Quick Action: Mark Pickup Done
   const handleMarkPickupDone = () => {
     setOrders((prev) =>
       prev.map((o) => (o.id === selectedOrder.id ? { ...o, pickupDone: true, status: 'Picked Up' } : o))
     );
-    showToast(`Garments collected from ${selectedOrder.name}! Status: Picked Up.`, 'success');
+    showToast(`Garments collected from ${selectedOrder.name}!`, 'success');
   };
 
-  // Open WhatsApp popup for current order
-  const openWhatsAppPopupForOrder = (prefillTemplate?: 1 | 2 | 3) => {
+  // WhatsApp Drawer Launcher
+  const openWhatsAppDrawer = (prefillTemplate?: 1 | 2 | 3) => {
     setIsWaOpen(true);
     let msg = '';
     if (prefillTemplate === 1) {
@@ -504,7 +655,11 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
     }
   };
 
-  // Send message via Evolution API
+  const applyTemplate = (tmpl: 1 | 2 | 3) => {
+    openWhatsAppDrawer(tmpl);
+  };
+
+  // Send WhatsApp message
   const handleSendWhatsAppMessage = async () => {
     if (!selectedOrder.phone) {
       showToast('Customer phone number is missing!', 'error');
@@ -512,7 +667,7 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
     }
     const textToSend = waInputMessage.trim();
     if (!textToSend) {
-      showToast('Please type a message to send.', 'error');
+      showToast('Please type a message before sending.', 'error');
       return;
     }
 
@@ -520,7 +675,6 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
     try {
       const res = await sendWhatsAppMessage(selectedOrder.phone, textToSend);
       if (res.success) {
-        // Append to chat history for this order
         const newMsg: ChatMessage = {
           id: 'MSG-' + Date.now(),
           sender: 'store',
@@ -535,70 +689,35 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
         }));
 
         setWaInputMessage('');
-        showToast(`WhatsApp sent to ${selectedOrder.name} (${selectedOrder.phone})! 🚀`, 'success');
+        showToast(`WhatsApp delivered to ${selectedOrder.name}!`, 'success');
       } else {
         showToast(`Delivery notice: ${res.message || 'Check gateway'}`, 'error');
       }
     } catch {
-      showToast('Failed to send WhatsApp message.', 'error');
+      showToast('Failed to dispatch WhatsApp message.', 'error');
     } finally {
       setSendingWa(false);
     }
   };
 
-  // Quick Action Buttons on Template Chips inside WhatsApp
-  const applyTemplate = (tmpl: 1 | 2 | 3) => {
-    if (tmpl === 1) {
-      setWaInputMessage(
-        generateBookingConfirmationTemplate({
-          customerName: selectedOrder.name,
-          orderId: selectedOrder.id,
-          address: selectedOrder.address,
-          date: selectedOrder.date || 'Today',
-          time: selectedOrder.time || selectedOrder.slot,
-        })
-      );
-    } else if (tmpl === 2) {
-      setWaInputMessage(
-        generateQuotationTemplate({
-          customerName: selectedOrder.name,
-          orderId: selectedOrder.id,
-          services: selectedOrder.service + (selectedOrder.items ? ` (${selectedOrder.items})` : ''),
-          amount: quoteAmount,
-        })
-      );
-    } else if (tmpl === 3) {
-      setWaInputMessage(
-        generateReadyForDeliveryTemplate({
-          customerName: selectedOrder.name,
-          orderId: selectedOrder.id,
-          amount: selectedOrder.total,
-        })
-      );
-    }
-  };
-
-  // Manual new order creation with strict validation
-  const handleCreateNewOrder = async (e: React.FormEvent) => {
+  // Manual New Order Creator
+  const handleCreateNewOrder = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 1. Validate Name
     const nameVal = validateCustomerName(newCustName);
     if (!nameVal.isValid) {
-      setNewCustNameError(nameVal.error || 'Please enter customer name');
+      setNewCustNameError(nameVal.error || 'Please enter full name');
       return;
     }
     setNewCustNameError('');
 
-    // 2. Validate Indian Mobile
     const phoneVal = validateIndianMobile(newCustPhone);
     if (!phoneVal.isValid) {
-      setNewCustPhoneError(phoneVal.error || 'Please enter valid 10-digit Indian mobile number');
+      setNewCustPhoneError(phoneVal.error || 'Please enter valid 10-digit mobile');
       return;
     }
     setNewCustPhoneError('');
 
-    // 3. Validate Address
     const addressVal = validateAddress(newCustAddress);
     if (!addressVal.isValid) {
       setNewCustAddressError(addressVal.error || 'Please enter complete pickup address');
@@ -619,7 +738,7 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
       date: newCustSlot.split('·')[0]?.trim() || 'Today',
       time: newCustSlot.split('·')[1]?.trim() || 'Afternoon',
       status: 'New Request',
-      notes: newCustNotes.trim() || 'Manual order entered by store staff',
+      notes: newCustNotes.trim() || 'Walk-in / Phone order logged by desk staff',
       createdAt: 'Just now',
       callDone: false,
       pickupDone: false,
@@ -645,382 +764,534 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
       // Local fallback
     }
 
-    showToast(`Order #${newId} created! Click WhatsApp icon to send pickup confirmation.`, 'success');
+    showToast(`Order #${newId} logged successfully!`, 'success');
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'New Request':
-        return 'bg-amber-500 text-white border-amber-600 shadow-xs font-black';
-      case 'Call Confirmed':
-        return 'bg-blue-600 text-white border-blue-700 shadow-xs font-black';
-      case 'Pickup Assigned':
-        return 'bg-indigo-600 text-white border-indigo-700 shadow-xs font-black';
-      case 'Picked Up':
-        return 'bg-purple-600 text-white border-purple-700 shadow-xs font-black';
-      case 'At Store / Inspection':
-        return 'bg-teal-600 text-white border-teal-700 shadow-xs font-black';
-      case 'Quotation Sent':
-        return 'bg-sky-500 text-white border-sky-600 shadow-xs font-black';
-      case 'Cleaning In Progress':
-        return 'bg-orange-500 text-white border-orange-600 shadow-xs font-black';
-      case 'Quality Check':
-        return 'bg-violet-600 text-white border-violet-700 shadow-xs font-black';
-      case 'Ready for Delivery':
-        return 'bg-emerald-500 text-white border-emerald-600 shadow-xs font-black animate-pulse';
-      case 'Out for Delivery':
-        return 'bg-lime-600 text-white border-lime-700 shadow-xs font-black';
-      case 'Delivered':
-        return 'bg-emerald-700 text-white border-emerald-800 shadow-xs font-black';
-      case 'Cancelled':
-        return 'bg-rose-600 text-white border-rose-700 shadow-xs font-black';
-      default:
-        return 'bg-slate-700 text-white border-slate-800 shadow-xs font-bold';
-    }
+  // Copy full order details for delivery rider dispatch
+  const handleCopyRiderDispatch = () => {
+    const text = `*UCLEAN PICKUP DISPATCH*\nOrder: #${selectedOrder.id}\nCustomer: ${selectedOrder.name}\nPhone: ${selectedOrder.phone}\nSlot: ${selectedOrder.slot}\nAddress: ${selectedOrder.address}\nServices: ${selectedOrder.service}\nNotes: ${selectedOrder.notes || 'None'}`;
+    copyToClipboard(text, 'Rider Dispatch Slip');
   };
+
+  // Current lifecycle index for selected order
+  const currentLifecycleIndex = useMemo(() => {
+    const current = selectedOrder.status;
+    if (current === 'New Request') return 0;
+    if (current === 'Call Confirmed' || current === 'Pickup Assigned') return 1;
+    if (current === 'Picked Up') return 2;
+    if (current === 'At Store / Inspection' || current === 'Quotation Sent') return 3;
+    if (current === 'Cleaning In Progress' || current === 'Quality Check') return 4;
+    if (current === 'Ready for Delivery' || current === 'Out for Delivery') return 5;
+    if (current === 'Delivered') return 6;
+    return 0;
+  }, [selectedOrder.status]);
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-slate-900 flex font-sans antialiased relative">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
       
       {/* ========================================================================= */}
-      {/* 1. LEFT EXECUTIVE SIDEBAR (Clean, high-contrast, modern store desk) */}
+      {/* 1. LEFT EXECUTIVE DESK SIDEBAR (Deep Charcoal/Slate for High Focus & Ergonomics) */}
       {/* ========================================================================= */}
-      <aside className="w-64 bg-[#052e16] text-white flex flex-col justify-between shrink-0 border-r border-emerald-500/30 hidden md:flex min-h-screen sticky top-0 h-screen shadow-lg">
+      <aside className="w-64 bg-[#0F172A] text-slate-200 flex flex-col justify-between shrink-0 border-r border-slate-800/80 hidden md:flex min-h-screen sticky top-0 h-screen z-20 shadow-xl">
         <div>
-          {/* Logo & Store Header */}
-          <div className="p-5 border-b border-emerald-500/30 bg-[#031f0f]">
+          {/* Header Brand */}
+          <div className="p-4 px-5 border-b border-slate-800/80 bg-[#0B132B]">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center font-black text-white text-lg shadow-md border border-white/20">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-black text-white text-base shadow-sm ring-1 ring-white/10">
                 U
               </div>
-              <div>
-                <h1 className="font-heading font-black text-base tracking-tight text-white leading-tight">
-                  UCLEAN CRM
-                </h1>
-                <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Nerul West Store
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="font-heading font-black text-sm tracking-tight text-white leading-tight">
+                    UCLEAN
+                  </h1>
+                  <span className="text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded border border-blue-400/30">
+                    CRM
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">
+                  Nerul West &bull; Branch #104
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Nav Links */}
-          <nav className="p-3 space-y-1.5 text-xs font-bold">
-            <button
-              onClick={() => setActiveNav('all')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeNav === 'all'
-                  ? 'bg-emerald-600 text-white shadow-md font-black'
-                  : 'text-emerald-100/90 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <FileText className="w-4 h-4" />
-                <span>All Orders</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-white/20 text-[11px] font-black">
-                {orders.length}
-              </span>
-            </button>
-
-            {/* 🔥 BAAT KARNA HAI (Calls Pending) */}
-            <button
-              onClick={() => setActiveNav('calls')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeNav === 'calls'
-                  ? 'bg-amber-500 text-slate-950 font-black shadow-md ring-2 ring-white/40'
-                  : 'text-amber-300 hover:bg-white/10'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <PhoneCall className="w-4 h-4 text-amber-300" />
-                <span>Baat Karna Hai (Calls)</span>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black shadow-xs animate-pulse">
-                {opsCounters.callsPendingCount}
-              </span>
-            </button>
-
-            {/* 🔥 AAJ KA PICKUP (Today's Pickups) */}
-            <button
-              onClick={() => setActiveNav('pickups')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeNav === 'pickups'
-                  ? 'bg-emerald-500 text-white font-black shadow-md ring-2 ring-white/40'
-                  : 'text-emerald-300 hover:bg-white/10'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Truck className="w-4 h-4 text-emerald-300" />
-                <span>Aaj Ka Pickup (Today)</span>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-[11px] font-black shadow-xs">
-                {opsCounters.pickupsTodayCount}
-              </span>
-            </button>
-
-            {/* Quotations Stage */}
-            <button
-              onClick={() => setActiveNav('quotes')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeNav === 'quotes'
-                  ? 'bg-purple-600 text-white font-black shadow-md'
-                  : 'text-purple-200 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <DollarSign className="w-4 h-4" />
-                <span>Quotation Pending</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-white/20 text-[11px] font-black">
-                {opsCounters.quotesPendingCount}
-              </span>
-            </button>
-
-            {/* Ready for Delivery */}
-            <button
-              onClick={() => setActiveNav('ready')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                activeNav === 'ready'
-                  ? 'bg-blue-600 text-white font-black shadow-md'
-                  : 'text-blue-200 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Package className="w-4 h-4" />
-                <span>Ready for Delivery</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-white/20 text-[11px] font-black">
-                {opsCounters.readyDeliveryCount}
-              </span>
-            </button>
-          </nav>
-
-          {/* Quick WhatsApp popup toggle button in sidebar */}
+          {/* Nav Categories */}
           <div className="p-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 block mb-2">
+              Operational Views
+            </span>
+
+            <nav className="space-y-1 text-xs font-semibold">
+              {/* All Orders */}
+              <button
+                onClick={() => setActiveNav('all')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                  activeNav === 'all'
+                    ? 'bg-blue-600 text-white shadow-sm font-bold'
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Layers className="w-4 h-4 text-blue-400" />
+                  <span>All Active Orders</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px] font-mono font-bold">
+                  {orders.length}
+                </span>
+              </button>
+
+              {/* Calls Pending (Amber Attention) */}
+              <button
+                onClick={() => setActiveNav('calls')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                  activeNav === 'calls'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-sm ring-1 ring-white/30'
+                    : 'text-amber-300/90 hover:bg-amber-500/10 hover:text-amber-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <PhoneCall className="w-4 h-4 text-amber-400" />
+                  <span>Baat Karna Hai (Calls)</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-amber-400/30 text-amber-200 text-[11px] font-mono font-black border border-amber-300/30">
+                  {opsCounters.callsPendingCount}
+                </span>
+              </button>
+
+              {/* Pickups Today (Blue Logistics) */}
+              <button
+                onClick={() => setActiveNav('pickups')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                  activeNav === 'pickups'
+                    ? 'bg-blue-600 text-white font-black shadow-sm'
+                    : 'text-blue-300/90 hover:bg-blue-600/10 hover:text-blue-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Truck className="w-4 h-4 text-blue-400" />
+                  <span>Aaj Ka Pickup (Today)</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-blue-500/30 text-blue-200 text-[11px] font-mono font-black border border-blue-400/30">
+                  {opsCounters.pickupsTodayCount}
+                </span>
+              </button>
+
+              {/* Quotation Pending (Purple Valuation) */}
+              <button
+                onClick={() => setActiveNav('quotes')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                  activeNav === 'quotes'
+                    ? 'bg-purple-600 text-white font-black shadow-sm'
+                    : 'text-purple-300/90 hover:bg-purple-600/10 hover:text-purple-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <DollarSign className="w-4 h-4 text-purple-400" />
+                  <span>Quotation Pending</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-purple-500/30 text-purple-200 text-[11px] font-mono font-bold border border-purple-400/30">
+                  {opsCounters.quotesPendingCount}
+                </span>
+              </button>
+
+              {/* Ready for Delivery (Emerald Fulfillment) */}
+              <button
+                onClick={() => setActiveNav('ready')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                  activeNav === 'ready'
+                    ? 'bg-emerald-600 text-white font-black shadow-sm'
+                    : 'text-emerald-300/90 hover:bg-emerald-600/10 hover:text-emerald-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Package className="w-4 h-4 text-emerald-400" />
+                  <span>Ready for Delivery</span>
+                </div>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 text-[11px] font-mono font-black border border-emerald-400/30">
+                  {opsCounters.readyDeliveryCount}
+                </span>
+              </button>
+
+              {/* Delivered Archive */}
+              <button
+                onClick={() => setActiveNav('delivered')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
+                  activeNav === 'delivered'
+                    ? 'bg-slate-700 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <CheckCheck className="w-4 h-4 text-slate-400" />
+                  <span>Delivered / Closed</span>
+                </div>
+              </button>
+            </nav>
+          </div>
+
+          {/* Quick WhatsApp Drawer trigger */}
+          <div className="p-3 pt-1">
             <button
               onClick={() => setIsWaOpen(!isWaOpen)}
-              className="w-full p-3 rounded-2xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+              className="w-full p-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 font-semibold text-xs flex items-center justify-between transition-colors border border-slate-700"
             >
-              <MessageSquare className="w-4 h-4 text-white" />
-              <span>{isWaOpen ? 'Hide WhatsApp Drawer' : 'Open WhatsApp Drawer'}</span>
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-[#25D366]" />
+                <span>WhatsApp Desk</span>
+              </div>
+              <span className="text-[10px] bg-[#25D366]/20 text-[#25D366] font-bold px-1.5 py-0.5 rounded border border-[#25D366]/30">
+                Connected
+              </span>
             </button>
           </div>
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-emerald-500/30 space-y-2 bg-[#031f0f]">
-          <div className="text-[11px] text-emerald-300 flex items-center gap-1.5 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-            Evolution API Connected
+        <div className="p-4 border-t border-slate-800 bg-[#0B132B]/80 space-y-2.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Live Firebase Sync
+            </span>
+            <span className="font-mono text-[10px] text-slate-500">v3.2</span>
           </div>
+
           <button
             onClick={onBackToStore}
-            className="w-full py-2.5 px-3 rounded-xl bg-white/15 hover:bg-white/25 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-colors border border-white/20"
+            className="w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700/80"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Customer Store</span>
+            <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
+            <span>Return to Store Front</span>
           </button>
         </div>
       </aside>
 
       {/* ========================================================================= */}
-      {/* 2. MAIN WORKSPACE */}
+      {/* 2. MAIN OPERATIONS WORKSPACE */}
       {/* ========================================================================= */}
-      <div className="flex-1 flex flex-col min-h-screen min-w-0">
+      <div className="flex-1 flex flex-col min-h-screen min-w-0 bg-[#F8FAFC]">
         
-        {/* Top Control Bar */}
-        <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3 sm:px-6 shadow-xs">
-          <div className="flex items-center justify-between gap-3">
+        {/* Top Control Header Bar */}
+        <header className="sticky top-0 z-30 bg-white border-b border-slate-200/90 px-4 py-3 sm:px-6 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             
-            {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, phone, order ID, address..."
-                className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300 focus:border-emerald-500 focus:bg-white rounded-xl text-xs font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-all"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2.5">
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-[11px] font-black">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Live Realtime Database</span>
+            {/* Search Input & Branch Indicator */}
+            <div className="flex items-center gap-3 flex-1 max-w-xl">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search customer, phone, order ID, address..."
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300/80 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none transition-all"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
+              {/* Sort selector */}
+              <div className="relative hidden md:flex items-center shrink-0">
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value as any)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-300/80 rounded-xl text-xs font-semibold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <option value="newest">Sort: Newest First</option>
+                  <option value="oldest">Sort: Oldest First</option>
+                  <option value="amount_high">Sort: Amount (High to Low)</option>
+                  <option value="amount_low">Sort: Amount (Low to High)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex items-center gap-2.5 self-end sm:self-auto">
               <button
-                onClick={() => setIsWaOpen(true)}
-                className="h-9 px-3.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-black text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                title="Open WhatsApp Side Panel"
+                onClick={() => openWhatsAppDrawer()}
+                className="h-9 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-2 border border-slate-200 transition-colors"
+                title="Open WhatsApp Communication Desk"
               >
-                <MessageSquare className="w-4 h-4" />
-                <span className="hidden sm:inline">WhatsApp Chat</span>
+                <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" />
+                <span className="hidden sm:inline">WhatsApp Desk</span>
               </button>
 
               <button
                 onClick={() => setNewOrderModalOpen(true)}
-                className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-black text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 shadow-xs transition-colors active:scale-98"
               >
                 <Plus className="w-4 h-4" />
-                <span>New Order</span>
+                <span>+ New Order</span>
               </button>
             </div>
           </div>
         </header>
 
-        {/* 🔥 DAILY ACTION BANNER (Aaj kitne logon ka pickup aur kitnon se baat karna hai) 🔥 */}
-        <section className="bg-gradient-to-r from-[#008f51] via-[#059669] to-[#047857] text-white px-4 py-4 sm:px-6 shadow-md border-b border-emerald-400/40">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-100">
-                  NERUL SECTOR 6 STORE &bull; LIVE DISPATCH &amp; OPERATIONS
+        {/* ======================================================================= */}
+        {/* EXECUTIVE KPI METRIC STRIP (Grounding in Color Psychology) */}
+        {/* ======================================================================= */}
+        <section className="bg-white border-b border-slate-200/90 px-4 py-3.5 sm:px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+            
+            {/* Card 1: 📞 Calls Pending ("Baat Karna Hai") — Amber for proactive attention */}
+            <button
+              onClick={() => setActiveNav('calls')}
+              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
+                activeNav === 'calls'
+                  ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-400/30 shadow-xs'
+                  : 'bg-slate-50/60 border-slate-200 hover:border-amber-300 hover:bg-amber-50/30'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <PhoneCall className="w-3 h-3 text-amber-600" />
+                  Calls To Make
                 </span>
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               </div>
-              <h2 className="font-heading font-black text-base sm:text-xl text-white tracking-tight">
-                Store Operations Action Center
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-2.5 flex-wrap">
-              {/* Badge 1: Calls to Make */}
-              <button
-                onClick={() => setActiveNav('calls')}
-                className={`px-3.5 py-2 rounded-xl border flex items-center gap-2 text-xs font-black transition-all shadow-sm active:scale-95 ${
-                  activeNav === 'calls'
-                    ? 'bg-amber-400 text-slate-950 border-white ring-2 ring-white/50'
-                    : 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-100 border-amber-300/40'
-                }`}
-              >
-                <PhoneCall className="w-4 h-4 text-amber-300" />
-                <span>
-                  Baat Karna Hai:{' '}
-                  <strong className="text-white bg-amber-500 px-2 py-0.5 rounded-lg font-black ml-1">
-                    {opsCounters.callsPendingCount} Calls
-                  </strong>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-heading font-black text-slate-900">
+                  {opsCounters.callsPendingCount}
                 </span>
-              </button>
+                <span className="text-[11px] text-amber-700 font-semibold">Baat Karna Hai</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                Pending phone verification
+              </div>
+            </button>
 
-              {/* Badge 2: Pickups to Make Today */}
-              <button
-                onClick={() => setActiveNav('pickups')}
-                className={`px-3.5 py-2 rounded-xl border flex items-center gap-2 text-xs font-black transition-all shadow-sm active:scale-95 ${
-                  activeNav === 'pickups'
-                    ? 'bg-emerald-300 text-slate-950 border-white ring-2 ring-white/50'
-                    : 'bg-emerald-400/20 hover:bg-emerald-400/30 text-emerald-100 border-emerald-300/40'
-                }`}
-              >
-                <Truck className="w-4 h-4 text-emerald-200" />
-                <span>
-                  Aaj Ka Pickup:{' '}
-                  <strong className="text-white bg-emerald-700 px-2 py-0.5 rounded-lg font-black ml-1">
-                    {opsCounters.pickupsTodayCount} Pickups
-                  </strong>
+            {/* Card 2: 🚚 Today's Pickups ("Aaj Ka Pickup") — Blue for planned logistics */}
+            <button
+              onClick={() => setActiveNav('pickups')}
+              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
+                activeNav === 'pickups'
+                  ? 'bg-blue-50/90 border-blue-400 ring-2 ring-blue-400/30 shadow-xs'
+                  : 'bg-slate-50/60 border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] font-bold text-blue-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <Truck className="w-3 h-3 text-blue-600" />
+                  Today's Pickups
                 </span>
-              </button>
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-heading font-black text-slate-900">
+                  {opsCounters.pickupsTodayCount}
+                </span>
+                <span className="text-[11px] text-blue-700 font-semibold">Aaj Ka Pickup</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                Scheduled for today
+              </div>
+            </button>
 
-              {/* Badge 3: Ready for delivery */}
-              <button
-                onClick={() => setActiveNav('ready')}
-                className={`px-3.5 py-2 rounded-xl border flex items-center gap-2 text-xs font-black transition-all shadow-sm active:scale-95 ${
-                  activeNav === 'ready'
-                    ? 'bg-blue-400 text-slate-950 border-white ring-2 ring-white/50'
-                    : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-100 border-blue-300/40'
-                }`}
-              >
-                <Package className="w-4 h-4 text-blue-200" />
-                <span>
-                  Ready Delivery:{' '}
-                  <strong className="text-white bg-blue-600 px-2 py-0.5 rounded-lg font-black ml-1">
-                    {opsCounters.readyDeliveryCount}
-                  </strong>
+            {/* Card 3: 💰 Quotations Awaiting — Purple for precision & valuation */}
+            <button
+              onClick={() => setActiveNav('quotes')}
+              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
+                activeNav === 'quotes'
+                  ? 'bg-purple-50/90 border-purple-400 ring-2 ring-purple-400/30 shadow-xs'
+                  : 'bg-slate-50/60 border-slate-200 hover:border-purple-300 hover:bg-purple-50/30'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] font-bold text-purple-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <DollarSign className="w-3 h-3 text-purple-600" />
+                  Quotes Pending
                 </span>
-              </button>
-            </div>
+                <span className="w-2 h-2 rounded-full bg-purple-500" />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-heading font-black text-slate-900">
+                  {opsCounters.quotesPendingCount}
+                </span>
+                <span className="text-[11px] text-purple-700 font-semibold">Inspection</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                Weighing & price quotes
+              </div>
+            </button>
+
+            {/* Card 4: 📦 Ready for Delivery — Emerald for completion & fresh fulfillment */}
+            <button
+              onClick={() => setActiveNav('ready')}
+              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
+                activeNav === 'ready'
+                  ? 'bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-400/30 shadow-xs'
+                  : 'bg-slate-50/60 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <Package className="w-3 h-3 text-emerald-600" />
+                  Ready Delivery
+                </span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-heading font-black text-slate-900">
+                  {opsCounters.readyDeliveryCount}
+                </span>
+                <span className="text-[11px] text-emerald-700 font-semibold">Packed</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                Freshly cleaned & bagged
+              </div>
+            </button>
+
+            {/* Card 5: 📋 Total Active Pipeline — Slate for stability */}
+            <button
+              onClick={() => setActiveNav('all')}
+              className={`hidden lg:block p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
+                activeNav === 'all'
+                  ? 'bg-slate-100/90 border-slate-400 ring-2 ring-slate-400/30 shadow-xs'
+                  : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <Layers className="w-3 h-3 text-slate-600" />
+                  Active Pipeline
+                </span>
+                <span className="w-2 h-2 rounded-full bg-slate-500" />
+              </div>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="text-xl font-heading font-black text-slate-900">
+                  {opsCounters.activePipelineCount}
+                </span>
+                <span className="text-[11px] text-slate-600 font-semibold">Total Orders</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                Currently tracking
+              </div>
+            </button>
+
           </div>
         </section>
 
-        {/* Main 2-Column Split: Orders Table on Left, Order Detail on Right */}
-        <div className="flex-1 p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* ======================================================================= */}
+        {/* 3. SPLIT WORKSPACE: ORDERS QUEUE (LEFT) + COMMAND CENTER (RIGHT) */}
+        {/* ======================================================================= */}
+        <div className="flex-1 p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 min-w-0">
           
-          {/* ORDERS LIST (5 cols) */}
-          <div className="lg:col-span-5 flex flex-col space-y-2.5">
-            <div className="flex items-center justify-between text-xs font-bold text-gray-500 px-1">
-              <span>Showing {filteredOrders.length} orders</span>
-              <span className="capitalize">{activeNav} View</span>
+          {/* ORDERS QUEUE (5 columns) */}
+          <div className="lg:col-span-5 flex flex-col space-y-3 min-w-0">
+            
+            {/* Queue Control Strip */}
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-600 px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-900 font-bold">
+                  {filteredOrders.length} {filteredOrders.length === 1 ? 'Order' : 'Orders'}
+                </span>
+                <span className="text-slate-400">&bull;</span>
+                <span className="capitalize text-slate-600">
+                  {activeNav === 'all' ? 'All Orders' : activeNav === 'calls' ? 'Pending Calls' : activeNav === 'pickups' ? "Today's Pickups" : activeNav}
+                </span>
+              </div>
+
+              {activeNav !== 'all' && (
+                <button
+                  onClick={() => setActiveNav('all')}
+                  className="text-blue-600 hover:text-blue-800 text-[11px] font-semibold"
+                >
+                  Clear filter
+                </button>
+              )}
             </div>
 
-            <div className="space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+            {/* Orders Cards List */}
+            <div className="space-y-2.5 max-h-[calc(100vh-230px)] overflow-y-auto pr-1">
               {filteredOrders.length === 0 ? (
-                <div className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center text-slate-500">
-                  <AlertCircle className="w-9 h-9 mx-auto text-amber-500 mb-2" />
-                  <p className="text-sm font-black text-slate-800">No matching orders found</p>
-                  <p className="text-xs text-slate-500 mt-1">Check another filter or clear search.</p>
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 shadow-xs">
+                  <AlertCircle className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                  <p className="text-sm font-bold text-slate-800">No matching orders found</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Try switching the filter or clear your search query.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setActiveNav('all');
+                      setSearch('');
+                    }}
+                    className="mt-3 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-800 transition-colors"
+                  >
+                    Reset Filters
+                  </button>
                 </div>
               ) : (
                 filteredOrders.map((ord) => {
                   const isSelected = ord.id === selectedId;
+                  const cfg = getStatusConfig(ord.status);
+
                   return (
                     <div
                       key={ord.id}
                       onClick={() => setSelectedId(ord.id)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
+                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative bg-white ${
                         isSelected
-                          ? 'bg-emerald-50/70 border-2 border-emerald-500 shadow-md ring-2 ring-emerald-400/25 -translate-y-0.5'
-                          : 'bg-white border-slate-200 hover:border-emerald-400 hover:shadow-xs'
+                          ? `border-blue-600 shadow-sm ring-1 ring-blue-500/30 ${cfg.accent} border-l-4 -translate-y-0.5`
+                          : 'border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
                       }`}
                     >
+                      {/* Top Row: Order ID, Status Chip, Time Ago */}
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-xs font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-md border border-emerald-300">
-                          #{ord.id}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            #{ord.id}
+                          </span>
+                          {!ord.callDone && ord.status === 'New Request' && (
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Call pending" />
+                          )}
+                        </div>
+
                         <span
-                          className={`text-[10.5px] font-black uppercase px-2.5 py-0.5 rounded-full border ${getStatusBadge(
-                            ord.status
-                          )}`}
+                          className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border flex items-center gap-1 ${cfg.pillBg}`}
                         >
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                           {ord.status}
                         </span>
                       </div>
 
-                      <div className="mt-2.5 flex items-start justify-between">
-                        <div>
-                          <h4 className="font-heading font-black text-[15px] text-slate-900 leading-tight">
+                      {/* Middle Row: Customer Name & Amount */}
+                      <div className="mt-2 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h4 className="font-heading font-black text-sm text-slate-900 leading-tight truncate">
                             {ord.name}
                           </h4>
-                          <p className="text-xs text-slate-600 font-bold mt-1 flex items-center gap-1.5">
-                            <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                          <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400" />
                             <span>{ord.phone || 'No phone'}</span>
                           </p>
                         </div>
-                        <div className="text-right">
-                          <span className="text-sm font-mono font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                             {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
                           </span>
-                          <p className="text-[10px] text-slate-400 font-semibold mt-1">{ord.createdAt || 'Recent'}</p>
+                          <p className="text-[10px] text-slate-400 font-medium mt-1">
+                            {ord.createdAt || 'Recent'}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                        <span className="truncate max-w-[210px] font-bold text-slate-800">
+                      {/* Services & Scheduled Slot Info */}
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 gap-2">
+                        <span className="truncate max-w-[200px] text-slate-700 font-medium">
                           {ord.service}
                         </span>
-                        <span className="text-[11px] font-semibold text-slate-500 shrink-0">
-                          {ord.slot}
+                        <span className="text-[11px] font-medium text-slate-500 shrink-0 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-slate-400" />
+                          {ord.slot.split('·')[0]?.trim() || ord.slot}
                         </span>
                       </div>
                     </div>
@@ -1030,93 +1301,130 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
             </div>
           </div>
 
-          {/* ORDER DETAIL PANEL (7 cols) */}
-          <div className="lg:col-span-7 flex flex-col space-y-4">
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-5">
+          {/* ===================================================================== */}
+          {/* COMMAND CENTER: SELECTED ORDER DETAILS & LIFECYCLE (7 columns) */}
+          {/* ===================================================================== */}
+          <div className="lg:col-span-7 flex flex-col space-y-4 min-w-0">
+            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs p-5 sm:p-6 space-y-5">
               
-              {/* Header */}
+              {/* Header: Customer, ID, Status, and Actions */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-black text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg border border-emerald-300">
-                      Order #{selectedOrder.id}
-                    </span>
-                    <span
-                      className={`text-xs font-black uppercase px-3 py-1 rounded-full border ${getStatusBadge(
-                        selectedOrder.status
-                      )}`}
-                    >
-                      {selectedOrder.status}
-                    </span>
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+                    {selectedOrder.name.slice(0, 2).toUpperCase()}
                   </div>
-                  <h2 className="font-heading font-black text-2xl text-slate-900 mt-2 tracking-tight">
-                    {selectedOrder.name}
-                  </h2>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200">
+                        #{selectedOrder.id}
+                      </span>
+                      <span
+                        className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                          getStatusConfig(selectedOrder.status).pillBg
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${getStatusConfig(selectedOrder.status).dot}`} />
+                        {selectedOrder.status}
+                      </span>
+                    </div>
+                    <h2 className="font-heading font-black text-xl text-slate-900 mt-1 tracking-tight">
+                      {selectedOrder.name}
+                    </h2>
+                  </div>
                 </div>
 
-                {/* Quick Call & WhatsApp Popup Button */}
+                {/* Primary Quick Communications */}
                 <div className="flex items-center gap-2">
                   <a
                     href={`tel:${selectedOrder.phone}`}
-                    className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold text-xs flex items-center gap-1.5 transition-colors border border-slate-200"
+                    className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-1.5 border border-slate-200 transition-colors"
+                    title="Direct Phone Call"
                   >
-                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Call Now</span>
+                    <Phone className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Call</span>
                   </a>
 
                   <button
-                    onClick={() => openWhatsAppPopupForOrder(1)}
-                    className="h-10 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+                    onClick={() => openWhatsAppDrawer(1)}
+                    className="h-9 px-3.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors active:scale-95"
+                    title="Open WhatsApp Chat Drawer"
                   >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Open WhatsApp</span>
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </button>
+
+                  <button
+                    onClick={handleCopyRiderDispatch}
+                    className="h-9 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center gap-1 border border-slate-200 transition-colors"
+                    title="Copy Dispatch Summary for Rider / Driver"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Rider Slip</span>
                   </button>
                 </div>
               </div>
 
-              {/* Order Info Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-gradient-to-br from-slate-50 to-emerald-50/30 p-4 rounded-2xl border border-slate-200">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                    Pickup Address
+              {/* Order Lifecycle Visual Progress Stepper */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span className="text-[11px] uppercase tracking-wider text-slate-500">
+                    Order Lifecycle Pipeline
                   </span>
-                  <p className="text-xs font-bold text-slate-900 leading-relaxed">
-                    {selectedOrder.address || 'Address not provided'}
-                  </p>
+                  <span className="text-blue-700 font-mono text-[11px]">
+                    Step {currentLifecycleIndex + 1} of 7
+                  </span>
                 </div>
 
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                    Scheduled Slot
-                  </span>
-                  <p className="text-xs font-bold text-slate-900">
-                    {selectedOrder.slot || 'Earliest available'}
-                  </p>
-                </div>
+                {/* Stepper Dots */}
+                <div className="grid grid-cols-7 gap-1 pt-1">
+                  {ORDER_LIFECYCLE_STEPS.map((step, idx) => {
+                    const isDone = idx < currentLifecycleIndex;
+                    const isCurrent = idx === currentLifecycleIndex;
 
-                <div className="space-y-1 sm:col-span-2 pt-2.5 border-t border-slate-200">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                    <Package className="w-3.5 h-3.5 text-emerald-600" />
-                    Services &amp; Notes
-                  </span>
-                  <p className="text-xs font-black text-slate-900">
-                    {selectedOrder.service} {selectedOrder.items ? `— ${selectedOrder.items}` : ''}
-                  </p>
-                  {selectedOrder.notes && (
-                    <p className="text-xs text-slate-600 italic mt-0.5 font-medium bg-white/70 p-2 rounded-lg border border-slate-200">
-                      &quot;{selectedOrder.notes}&quot;
-                    </p>
-                  )}
+                    return (
+                      <button
+                        key={step.key}
+                        onClick={() => handleStatusChange(step.key)}
+                        className={`group flex flex-col items-center text-center p-1 rounded-lg transition-all ${
+                          isCurrent
+                            ? 'bg-blue-600/10'
+                            : 'hover:bg-slate-200/50'
+                        }`}
+                        title={`Click to set status to ${step.label}`}
+                      >
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono transition-all ${
+                            isDone
+                              ? 'bg-emerald-600 text-white'
+                              : isCurrent
+                              ? 'bg-blue-600 text-white ring-2 ring-blue-400/40 shadow-xs'
+                              : 'bg-slate-200 text-slate-600'
+                          }`}
+                        >
+                          {isDone ? <Check className="w-3 h-3" /> : idx + 1}
+                        </div>
+                        <span
+                          className={`text-[9.5px] mt-1 font-semibold truncate max-w-full ${
+                            isCurrent
+                              ? 'text-blue-700 font-black'
+                              : isDone
+                              ? 'text-emerald-700'
+                              : 'text-slate-500'
+                          }`}
+                        >
+                          {step.short}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Operations Action Buttons: 1. Confirm Call, 2. Mark Pickup */}
-              <div className="flex items-center gap-2.5 pt-1">
+              {/* Operational Action Buttons: Confirm Call & Pickup Complete */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={handleMarkCallDone}
-                  className="flex-1 h-11 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98"
+                  className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors active:scale-98"
                 >
                   <PhoneCall className="w-4 h-4 text-blue-200" />
                   <span>Baat Ho Gayi (Confirm Call)</span>
@@ -1124,83 +1432,191 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
 
                 <button
                   onClick={handleMarkPickupDone}
-                  className="flex-1 h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98"
+                  className="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors active:scale-98"
                 >
                   <Truck className="w-4 h-4 text-emerald-200" />
                   <span>Pickup Complete (Kapde Le Liye)</span>
                 </button>
               </div>
 
-              {/* 3 WhatsApp Quick Launch Cards */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-600">
-                    Send WhatsApp Notification:
+              {/* Customer & Delivery Logistics Card */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/90 text-xs">
+                
+                {/* Pickup Address */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      Pickup Address
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(selectedOrder.address, 'Address')}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-0.5"
+                    >
+                      <Copy className="w-2.5 h-2.5" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                  <p className="font-semibold text-slate-900 leading-relaxed">
+                    {selectedOrder.address || 'Address not provided'}
+                  </p>
+                  <a
+                    href={`https://maps.google.com/?q=${encodeURIComponent(
+                      `${selectedOrder.address}, Nerul West, Navi Mumbai`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-semibold pt-0.5"
+                  >
+                    <Navigation className="w-3 h-3" />
+                    <span>Open in Google Maps</span>
+                  </a>
+                </div>
+
+                {/* Scheduled Slot & Contact */}
+                <div className="space-y-1">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    Pickup Schedule
                   </span>
-                  <span className="text-[11px] font-black text-[#25D366] flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse"></span>
-                    Evolution API Connected
+                  <p className="font-semibold text-slate-900">
+                    {selectedOrder.slot || 'Standard pickup window'}
+                  </p>
+                  <div className="pt-1 flex items-center gap-2">
+                    <span className="text-[10px] uppercase font-bold text-slate-500">Phone:</span>
+                    <span className="font-mono font-bold text-slate-900">{selectedOrder.phone}</span>
+                    <button
+                      onClick={() => copyToClipboard(selectedOrder.phone, 'Phone')}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+
+                {/* Services & Instructions */}
+                <div className="space-y-1 sm:col-span-2 pt-2.5 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                      <Package className="w-3 h-3 text-slate-400" />
+                      Garment &amp; Service Package
+                    </span>
+                    <span className="text-xs font-mono font-bold text-slate-900">
+                      Estimate: {selectedOrder.total.startsWith('₹') ? selectedOrder.total : `₹${selectedOrder.total}`}
+                    </span>
+                  </div>
+                  <p className="font-bold text-slate-900">
+                    {selectedOrder.service} {selectedOrder.items ? `— ${selectedOrder.items}` : ''}
+                  </p>
+                  {selectedOrder.notes && (
+                    <div className="mt-1 p-2 rounded-xl bg-white border border-slate-200 text-slate-700 italic">
+                      &quot;{selectedOrder.notes}&quot;
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* WhatsApp Notification Action Cards (3 Clean Intent Templates) */}
+              <div className="space-y-2 pt-1 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    WhatsApp Customer Notifications:
+                  </span>
+                  <span className="text-[11px] text-[#25D366] font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#25D366] animate-pulse"></span>
+                    Evolution API Ready
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* Template 1: Pickup Confirmed */}
                   <button
-                    onClick={() => openWhatsAppPopupForOrder(1)}
-                    className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-105 text-white shadow-sm text-left transition-all border border-emerald-400 active:scale-98"
+                    onClick={() => openWhatsAppDrawer(1)}
+                    className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200 hover:border-blue-300 text-left transition-all active:scale-98 group"
                   >
-                    <span className="text-[10px] font-black uppercase text-emerald-100 block mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700 block mb-0.5">
                       Template 1
                     </span>
-                    <h5 className="font-black text-xs text-white">Pickup Confirmed</h5>
-                    <p className="text-[10.5px] text-emerald-100 mt-0.5">Booking receipt message</p>
+                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-blue-900">
+                      Pickup Confirmed
+                    </h5>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5">
+                      Send booking receipt
+                    </p>
                   </button>
 
+                  {/* Template 2: Send Quotation */}
                   <button
-                    onClick={() => openWhatsAppPopupForOrder(2)}
-                    className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 hover:brightness-105 text-white shadow-sm text-left transition-all border border-amber-400 active:scale-98"
+                    onClick={() => openWhatsAppDrawer(2)}
+                    className="p-3 rounded-2xl bg-slate-50 hover:bg-purple-50/60 border border-slate-200 hover:border-purple-300 text-left transition-all active:scale-98 group"
                   >
-                    <span className="text-[10px] font-black uppercase text-amber-100 block mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-purple-700 block mb-0.5">
                       Template 2
                     </span>
-                    <h5 className="font-black text-xs text-white">Send Quotation</h5>
-                    <p className="text-[10.5px] text-amber-100 mt-0.5">Garment price estimate</p>
+                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-purple-900">
+                      Send Quotation
+                    </h5>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5">
+                      Garment price estimate
+                    </p>
                   </button>
 
+                  {/* Template 3: Ready for Delivery */}
                   <button
-                    onClick={() => openWhatsAppPopupForOrder(3)}
-                    className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 hover:brightness-105 text-white shadow-sm text-left transition-all border border-blue-400 active:scale-98"
+                    onClick={() => openWhatsAppDrawer(3)}
+                    className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 text-left transition-all active:scale-98 group"
                   >
-                    <span className="text-[10px] font-black uppercase text-blue-100 block mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 block mb-0.5">
                       Template 3
                     </span>
-                    <h5 className="font-black text-xs text-white">Ready for Delivery</h5>
-                    <p className="text-[10.5px] text-blue-100 mt-0.5">Delivery coordination</p>
+                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-emerald-900">
+                      Ready for Delivery
+                    </h5>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5">
+                      Delivery coordination
+                    </p>
                   </button>
                 </div>
               </div>
 
-              {/* Status Stepper */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-600 block">
-                  Change Order Status:
+              {/* Status Switcher (Grouped Logically for Ergonomics & Clarity) */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                  Quick Status Transition:
                 </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {STATUS_LIST.slice(0, 8).map((st) => {
-                    const isCur = selectedOrder.status === st;
-                    return (
-                      <button
-                        key={st}
-                        onClick={() => handleStatusChange(st)}
-                        className={`px-3 py-2 rounded-xl text-xs font-black border transition-all text-center active:scale-95 ${
-                          isCur
-                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-400/40'
-                            : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
-                        }`}
-                      >
-                        {st}
-                      </button>
-                    );
-                  })}
+
+                <div className="space-y-2.5">
+                  {STATUS_GROUPS.map((grp) => (
+                    <div key={grp.group} className="space-y-1">
+                      <div className="text-[10.5px] font-bold text-slate-500 flex items-center gap-1.5">
+                        <span>{grp.group}</span>
+                        <span className="text-slate-300">&bull;</span>
+                        <span className="font-normal text-slate-400">{grp.description}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {grp.statuses.map((st) => {
+                          const isCurrent = selectedOrder.status === st;
+                          const cfg = getStatusConfig(st);
+
+                          return (
+                            <button
+                              key={st}
+                              onClick={() => handleStatusChange(st)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                                isCurrent
+                                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${isCurrent ? 'bg-white' : cfg.dot}`} />
+                              <span>{st}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1211,27 +1627,29 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. 🔥 WHATSAPP WEB STYLE SIDE POPUP (DRAWER / POPUP) 🔥 */}
+      {/* 4. WHATSAPP WEB DESK SLIDE DRAWER */}
       {/* ========================================================================= */}
       {isWaOpen && (
-        <div className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[420px] bg-[#EFEAE2] shadow-2xl border-l border-gray-300 flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[440px] bg-[#EFEAE2] shadow-2xl border-l border-slate-300 flex flex-col animate-in slide-in-from-right duration-250">
           
-          {/* WhatsApp Header (Classic Dark Green #075E54) */}
-          <div className="bg-[#075E54] text-white p-3.5 px-4 flex items-center justify-between shadow-md select-none shrink-0">
+          {/* Header (Official WhatsApp Palette #075E54) */}
+          <div className="bg-[#075E54] text-white p-3.5 px-4 flex items-center justify-between shadow-md shrink-0 select-none">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[#128C7E] flex items-center justify-center font-bold text-white text-sm shadow-inner">
                 {selectedOrder.name.slice(0, 2).toUpperCase()}
               </div>
-              <div>
-                <h3 className="font-bold text-sm leading-tight text-white flex items-center gap-1.5">
-                  {selectedOrder.name}
-                  <span className="text-[10px] font-normal text-[#9fe3c1] font-mono">
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm leading-tight text-white flex items-center gap-1.5 truncate">
+                  <span>{selectedOrder.name}</span>
+                  <span className="text-[10px] font-normal text-emerald-200 font-mono">
                     (#{selectedOrder.id})
                   </span>
                 </h3>
-                <p className="text-[11px] text-[#A8DEC4] flex items-center gap-1">
+                <p className="text-[11px] text-emerald-100 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#25D366]"></span>
-                  {selectedOrder.phone || 'No phone'} &bull; Online
+                  <span>{selectedOrder.phone || 'No phone'}</span>
+                  <span>&bull;</span>
+                  <span>Online Desk</span>
                 </p>
               </div>
             </div>
@@ -1244,59 +1662,59 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                 target="_blank"
                 rel="noreferrer"
                 title="Open directly in WhatsApp Web"
-                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/90 hover:text-white transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
               </a>
 
               <button
                 onClick={() => setIsWaOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white/90 hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
 
-          {/* Quick Template Chips Strip */}
-          <div className="bg-[#f0f2f5] p-2.5 px-3 border-b border-gray-200 flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold shrink-0">
-            <span className="text-gray-500 text-[10px] uppercase font-black shrink-0">Templates:</span>
+          {/* Quick Template Selector Chips */}
+          <div className="bg-[#F0F2F5] p-2.5 px-3 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold shrink-0">
+            <span className="text-slate-500 text-[10px] uppercase font-bold shrink-0">Templates:</span>
             <button
               onClick={() => applyTemplate(1)}
-              className="px-2.5 py-1 rounded-full bg-white hover:bg-[#d9fdd3] text-[#075E54] border border-gray-300 hover:border-[#25D366] transition-all whitespace-nowrap shadow-2xs"
+              className="px-2.5 py-1 rounded-full bg-white hover:bg-emerald-50 text-emerald-800 border border-slate-300 hover:border-emerald-400 transition-colors whitespace-nowrap shadow-2xs"
             >
-              1. Pickup Received
+              1. Pickup Receipt
             </button>
             <button
               onClick={() => applyTemplate(2)}
-              className="px-2.5 py-1 rounded-full bg-white hover:bg-[#fff0db] text-amber-800 border border-gray-300 hover:border-amber-400 transition-all whitespace-nowrap shadow-2xs"
+              className="px-2.5 py-1 rounded-full bg-white hover:bg-purple-50 text-purple-800 border border-slate-300 hover:border-purple-400 transition-colors whitespace-nowrap shadow-2xs"
             >
               2. Quotation
             </button>
             <button
               onClick={() => applyTemplate(3)}
-              className="px-2.5 py-1 rounded-full bg-white hover:bg-[#e1f0ff] text-blue-800 border border-gray-300 hover:border-blue-400 transition-all whitespace-nowrap shadow-2xs"
+              className="px-2.5 py-1 rounded-full bg-white hover:bg-blue-50 text-blue-800 border border-slate-300 hover:border-blue-400 transition-colors whitespace-nowrap shadow-2xs"
             >
-              3. Ready for Delivery
+              3. Ready Notice
             </button>
           </div>
 
-          {/* WhatsApp Chat Wallpaper Body */}
+          {/* Chat Bubble Body with WhatsApp Wallpaper */}
           <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#EFEAE2]">
             
-            {/* Encryption notice */}
+            {/* Notice */}
             <div className="text-center">
               <span className="inline-block bg-[#FFEECD] text-[#632608] text-[10px] px-3 py-1 rounded-lg shadow-2xs">
-                🔒 Connected to Evolution API &bull; Messages deliver instantly to customer
+                🔒 Connected via Evolution API &bull; Direct customer delivery
               </span>
             </div>
 
-            {/* Sent Messages History for this order */}
+            {/* Past Messages History for this order */}
             {(chatHistory[selectedOrder.id] || []).map((msg) => (
               <div key={msg.id} className="flex justify-end">
-                <div className="max-w-[85%] bg-[#D9FDD3] text-gray-900 rounded-2xl rounded-tr-none p-3 shadow-xs text-xs space-y-1">
+                <div className="max-w-[85%] bg-[#D9FDD3] text-slate-900 rounded-2xl rounded-tr-none p-3 shadow-xs text-xs space-y-1">
                   <p className="whitespace-pre-line leading-relaxed font-sans">{msg.text}</p>
-                  <div className="text-[10px] text-gray-500 text-right flex items-center justify-end gap-1">
+                  <div className="text-[10px] text-slate-500 text-right flex items-center justify-end gap-1">
                     <span>{msg.time}</span>
                     <span className="text-[#53bdeb] font-bold">✓✓</span>
                   </div>
@@ -1304,15 +1722,15 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
               </div>
             ))}
 
-            {/* Live Message Preview Bubble if typing or selected */}
+            {/* Message Preview */}
             {waInputMessage && (
               <div className="flex justify-end">
-                <div className="max-w-[90%] bg-white text-gray-900 rounded-2xl rounded-tr-none p-3 shadow-sm border border-emerald-300/60 text-xs space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-black text-[#008f51] pb-1 border-b border-gray-100">
-                    <span>Message to be sent:</span>
+                <div className="max-w-[90%] bg-white text-slate-900 rounded-2xl rounded-tr-none p-3 shadow-xs border border-emerald-300 text-xs space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-emerald-700 pb-1 border-b border-slate-100">
+                    <span>Message to Dispatch:</span>
                     <span>Ready</span>
                   </div>
-                  <p className="whitespace-pre-line leading-relaxed font-mono text-[11px] text-gray-800">
+                  <p className="whitespace-pre-line leading-relaxed font-mono text-[11px] text-slate-800">
                     {waInputMessage}
                   </p>
                 </div>
@@ -1320,11 +1738,11 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
             )}
           </div>
 
-          {/* Quotation Amount Quick Adjuster (if template 2 selected) */}
-          <div className="bg-[#F0F2F5] px-3 py-1.5 border-t border-gray-200 flex items-center justify-between text-xs">
-            <span className="text-[11px] font-bold text-gray-600">Quick Quote Amount:</span>
+          {/* Quick Quote Adjuster */}
+          <div className="bg-[#F0F2F5] px-3 py-1.5 border-t border-slate-200 flex items-center justify-between text-xs">
+            <span className="text-[11px] font-semibold text-slate-600">Quick Quote Amount (₹):</span>
             <div className="flex items-center gap-1.5">
-              <span className="text-gray-500 font-bold">₹</span>
+              <span className="text-slate-500 font-bold">₹</span>
               <input
                 type="number"
                 value={quoteAmount}
@@ -1332,19 +1750,19 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                   setQuoteAmount(e.target.value);
                   applyTemplate(2);
                 }}
-                className="w-20 px-2 py-0.5 bg-white border border-gray-300 rounded-md text-xs font-black outline-none"
+                className="w-20 px-2 py-0.5 bg-white border border-slate-300 rounded-md text-xs font-bold outline-none"
               />
             </div>
           </div>
 
-          {/* WhatsApp Bottom Input & Send Box */}
-          <div className="bg-[#F0F2F5] p-3 border-t border-gray-200 flex items-end gap-2 shrink-0">
+          {/* Input & Send Bar */}
+          <div className="bg-[#F0F2F5] p-3 border-t border-slate-200 flex items-end gap-2 shrink-0">
             <textarea
               rows={3}
               value={waInputMessage}
               onChange={(e) => setWaInputMessage(e.target.value)}
-              placeholder="Type message or click a template above..."
-              className="flex-1 px-3 py-2 bg-white border border-gray-300 focus:border-[#25D366] rounded-2xl text-xs outline-none resize-none leading-relaxed"
+              placeholder="Type customer message or select a template above..."
+              className="flex-1 px-3 py-2 bg-white border border-slate-300 focus:border-[#25D366] rounded-2xl text-xs outline-none resize-none leading-relaxed text-slate-800"
             />
 
             <button
@@ -1352,7 +1770,7 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
               disabled={sendingWa || !waInputMessage.trim()}
               onClick={handleSendWhatsAppMessage}
               className="w-11 h-11 rounded-full bg-[#00A884] hover:bg-[#008f6f] text-white flex items-center justify-center shadow-md active:scale-95 disabled:opacity-40 transition-all shrink-0"
-              title="Send via Evolution WhatsApp API"
+              title="Dispatch message via WhatsApp"
             >
               {sendingWa ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -1366,18 +1784,20 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
       )}
 
       {/* ========================================================================= */}
-      {/* 4. CREATE MANUAL NEW ORDER MODAL */}
+      {/* 5. ADD MANUAL ORDER MODAL */}
       {/* ========================================================================= */}
       {newOrderModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
-            <div className="bg-gradient-to-r from-[#008f51] to-emerald-700 text-white p-4 px-5 flex items-center justify-between">
+            
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-4 px-5 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-200">
-                  Store Desk &bull; Nerul West
+                <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+                  UClean Nerul West &bull; Front Desk
                 </span>
                 <h3 className="font-heading font-black text-base text-white">
-                  Add New Customer Order
+                  Add New Customer Booking
                 </h3>
               </div>
               <button
@@ -1388,10 +1808,11 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
               </button>
             </div>
 
+            {/* Modal Form */}
             <form onSubmit={handleCreateNewOrder} className="p-5 overflow-y-auto space-y-3.5 flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                     Customer Name *
                   </label>
                   <input
@@ -1403,26 +1824,25 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                       if (newCustNameError) setNewCustNameError('');
                     }}
                     placeholder="e.g. Imran Khan"
-                    className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold text-slate-900 outline-none transition-all ${
+                    className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-semibold text-slate-900 outline-none transition-all ${
                       newCustNameError
                         ? 'border-rose-500 bg-rose-50/50'
-                        : 'border-slate-300 focus:border-emerald-500 focus:bg-white'
+                        : 'border-slate-300 focus:border-blue-600 focus:bg-white'
                     }`}
                   />
                   {newCustNameError && (
-                    <p className="text-[10px] text-rose-600 font-bold mt-1">
+                    <p className="text-[10px] text-rose-600 font-semibold mt-1">
                       {newCustNameError}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                    Indian Mobile *
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Mobile Number *
                   </label>
                   <div className="flex rounded-xl overflow-hidden">
-                    <div className="flex items-center gap-1 bg-slate-100 border border-r-0 border-slate-300 px-2.5 text-xs font-bold text-slate-800 shrink-0">
-                      <span>🇮🇳</span>
+                    <div className="flex items-center gap-1 bg-slate-100 border border-r-0 border-slate-300 px-2.5 text-xs font-bold text-slate-700 shrink-0">
                       <span>+91</span>
                     </div>
                     <input
@@ -1436,15 +1856,15 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                         if (newCustPhoneError) setNewCustPhoneError('');
                       }}
                       placeholder="10-digit number"
-                      className={`w-full px-3 py-2 border rounded-r-xl text-xs font-bold text-slate-900 outline-none transition-all ${
+                      className={`w-full px-3 py-2 border rounded-r-xl text-xs font-semibold text-slate-900 outline-none transition-all ${
                         newCustPhoneError
                           ? 'border-rose-500 bg-rose-50/50'
-                          : 'border-slate-300 focus:border-emerald-500 focus:bg-white bg-slate-50'
+                          : 'border-slate-300 focus:border-blue-600 focus:bg-white bg-slate-50'
                       }`}
                     />
                   </div>
                   {newCustPhoneError && (
-                    <p className="text-[10px] text-rose-600 font-bold mt-1">
+                    <p className="text-[10px] text-rose-600 font-semibold mt-1">
                       {newCustPhoneError}
                     </p>
                   )}
@@ -1452,13 +1872,13 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
               </div>
 
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                  Service Requested
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Service Package
                 </label>
                 <select
                   value={newCustService}
                   onChange={(e) => setNewCustService(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-emerald-500 focus:bg-white rounded-xl text-xs font-bold text-slate-900 outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none cursor-pointer"
                 >
                   <option value="Wash & Steam Iron — ₹149/kg">Wash & Steam Iron — ₹149/kg</option>
                   <option value="Wash & Fold — ₹109/kg">Wash & Fold — ₹109/kg</option>
@@ -1470,8 +1890,8 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
               </div>
 
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                  Complete Address *
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Pickup Address *
                 </label>
                 <input
                   type="text"
@@ -1482,14 +1902,14 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                     if (newCustAddressError) setNewCustAddressError('');
                   }}
                   placeholder="e.g. Flat 301, Palm Beach Heights, Sector 6, Nerul West"
-                  className={`w-full px-3 py-2 border rounded-xl text-xs font-bold text-slate-900 outline-none transition-all ${
+                  className={`w-full px-3 py-2 border rounded-xl text-xs font-semibold text-slate-900 outline-none transition-all ${
                     newCustAddressError
                       ? 'border-rose-500 bg-rose-50/50'
-                      : 'border-slate-300 focus:border-emerald-500 focus:bg-white bg-slate-50'
+                      : 'border-slate-300 focus:border-blue-600 focus:bg-white bg-slate-50'
                   }`}
                 />
                 {newCustAddressError && (
-                  <p className="text-[10px] text-rose-600 font-bold mt-1">
+                  <p className="text-[10px] text-rose-600 font-semibold mt-1">
                     {newCustAddressError}
                   </p>
                 )}
@@ -1497,13 +1917,13 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
-                    Pickup Time Slot
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                    Time Slot
                   </label>
                   <select
                     value={newCustSlot}
                     onChange={(e) => setNewCustSlot(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-emerald-500 focus:bg-white rounded-xl text-xs font-bold text-slate-900 outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none cursor-pointer"
                   >
                     <option value="Today · 10:00 AM – 12:00 PM">Today · 10:00 AM – 12:00 PM</option>
                     <option value="Today · 02:00 PM – 04:00 PM">Today · 02:00 PM – 04:00 PM</option>
@@ -1514,7 +1934,7 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                     Initial Estimate (₹)
                   </label>
                   <input
@@ -1522,21 +1942,21 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                     value={newCustAmount}
                     onChange={(e) => setNewCustAmount(e.target.value)}
                     placeholder="149"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-emerald-500 focus:bg-white rounded-xl text-xs font-bold text-slate-900 outline-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-black uppercase tracking-wider text-slate-700 mb-1">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
                   Garment Details / Instructions
                 </label>
                 <textarea
                   rows={2}
                   value={newCustNotes}
                   onChange={(e) => setNewCustNotes(e.target.value)}
-                  placeholder="e.g. 5 Shirts, 2 Pants, urgent delivery"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-emerald-500 focus:bg-white rounded-xl text-xs font-bold text-slate-900 outline-none resize-none"
+                  placeholder="e.g. 5 Shirts, 2 Pants, urgent evening delivery"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none resize-none"
                 />
               </div>
 
@@ -1544,16 +1964,16 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
                 <button
                   type="button"
                   onClick={() => setNewOrderModalOpen(false)}
-                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs"
+                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                  className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 active:scale-98 transition-colors"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Save Order</span>
+                  <span>Create Booking</span>
                 </button>
               </div>
             </form>
@@ -1561,25 +1981,30 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
         </div>
       )}
 
-      {/* Toast Notification */}
+      {/* ========================================================================= */}
+      {/* 6. TOAST NOTIFICATIONS */}
+      {/* ========================================================================= */}
       {toastMsg && (
         <div
-          className={`fixed bottom-5 left-5 z-50 p-4 rounded-2xl shadow-xl flex items-center gap-3 border animate-in slide-in-from-bottom duration-300 max-w-md ${
+          className={`fixed bottom-5 right-5 z-50 p-3.5 px-4 rounded-2xl shadow-lg flex items-center gap-2.5 border animate-in slide-in-from-bottom duration-250 max-w-md ${
             toastMsg.type === 'error'
-              ? 'bg-rose-900 text-white border-rose-700'
+              ? 'bg-rose-950 text-white border-rose-800'
               : toastMsg.type === 'info'
-              ? 'bg-[#072618] text-white border-[#008f51]'
-              : 'bg-emerald-900 text-white border-emerald-700'
+              ? 'bg-slate-900 text-white border-slate-800'
+              : 'bg-slate-900 text-white border-slate-800'
           }`}
         >
           {toastMsg.type === 'error' ? (
-            <AlertCircle className="w-5 h-5 text-rose-300 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
           ) : (
-            <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           )}
-          <span className="text-xs font-bold leading-snug">{toastMsg.text}</span>
-          <button onClick={() => setToastMsg(null)} className="ml-auto text-white/60 hover:text-white">
-            <X className="w-4 h-4" />
+          <span className="text-xs font-medium leading-snug">{toastMsg.text}</span>
+          <button
+            onClick={() => setToastMsg(null)}
+            className="ml-auto text-slate-400 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
