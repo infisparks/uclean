@@ -33,6 +33,7 @@ import {
   CheckCheck,
   Layers,
   ShoppingBag,
+  LogOut,
 } from 'lucide-react';
 import {
   sendWhatsAppMessage,
@@ -209,7 +210,13 @@ const STATUS_GROUPS = [
   },
 ];
 
-export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
+export function CrmPortal({
+  onBackToStore,
+  onLogout,
+}: {
+  onBackToStore: () => void;
+  onLogout?: () => void;
+}) {
   const [orders, setOrders] = useState<CrmOrder[]>(INITIAL_DEMO_ORDERS);
   const [selectedId, setSelectedId] = useState<string>(INITIAL_DEMO_ORDERS[0].id);
   const [search, setSearch] = useState('');
@@ -957,9 +964,19 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
             <span className="font-mono text-[10px] text-slate-500">v3.2</span>
           </div>
 
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors border border-rose-500/20 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log Out Admin</span>
+            </button>
+          )}
+
           <button
             onClick={onBackToStore}
-            className="w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700/80"
+            className="w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700/80 cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
             <span>Return to Store Front</span>
@@ -1026,11 +1043,22 @@ export function CrmPortal({ onBackToStore }: { onBackToStore: () => void }) {
 
               <button
                 onClick={() => setNewOrderModalOpen(true)}
-                className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 shadow-xs transition-colors active:scale-98"
+                className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 shadow-xs transition-colors active:scale-98 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>+ New Order</span>
               </button>
+
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-semibold text-xs flex items-center gap-1.5 border border-slate-200 hover:border-rose-200 transition-colors cursor-pointer"
+                  title="Sign out of Admin Portal"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Log Out</span>
+                </button>
+              )}
             </div>
           </div>
         </header>

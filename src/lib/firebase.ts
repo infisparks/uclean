@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
 import {
   getDatabase,
   ref,
@@ -32,6 +33,9 @@ if (getApps().length > 0) {
 } else {
   app = initializeApp(firebaseConfig);
 }
+
+// Initialize Firebase Auth
+export const auth: Auth = getAuth(app);
 
 // Initialize Firebase Realtime Database
 export const rtdb: Database = getDatabase(app);

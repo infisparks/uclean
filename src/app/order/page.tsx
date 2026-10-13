@@ -27,15 +27,12 @@ import {
   validateCustomerName,
   validateAddress,
 } from '@/lib/validation';
-
-const AVAILABLE_SERVICES = [
-  { id: 'Wash & Fold — ₹109/kg', name: 'Wash & Fold', icon: '🧺', rate: '₹109/kg', keywords: 'wash fold laundry kg everyday clothes' },
-  { id: 'Wash & Iron — ₹149/kg', name: 'Wash & Iron', icon: '👔', rate: '₹149/kg', keywords: 'wash iron steam pressed laundry kg' },
-  { id: 'Dry Cleaning — from ₹149', name: 'Dry Cleaning & Suits', icon: '🧥', rate: 'From ₹149', keywords: 'dry clean suit blazer coat sherwani kurta saree lehenga jacket' },
-  { id: 'Home Textiles & Sofa Cleaning', name: 'Sofa & Carpet Care', icon: '🛋️', rate: 'From ₹30/sq.ft', keywords: 'sofa couch carpet upholstery shampoo' },
-  { id: 'Lining Curtain — ₹45/sq. ft.', name: 'Curtains (Parda)', icon: '🪟', rate: '₹45/sq.ft', keywords: 'curtain parda drape window door' },
-  { id: 'Shoe Spa & Cleaning', name: 'Shoe Spa & Leather', icon: '👟', rate: 'Buy 2 Get 1', keywords: 'shoe sneakers boots leather footwear spa' },
-];
+import {
+  PRIMARY_SERVICES,
+  searchCatalog,
+  CatalogService,
+} from '@/lib/servicesCatalog';
+import { AllServicesModal } from '@/components/AllServicesModal';
 
 function OrderFormContent() {
   const router = useRouter();
@@ -60,21 +57,18 @@ function OrderFormContent() {
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+  const [isServicesModalOpen, setIsServicesModalOpen] = useState(false);
 
   // Validation error states
   const [nameError, setNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [addressError, setAddressError] = useState('');
 
+  // 6 Primary services by default; searches entire 100+ services catalog when user types
   const filteredAvailableServices = React.useMemo(() => {
     const raw = serviceSearch.toLowerCase().trim();
-    if (!raw) return AVAILABLE_SERVICES;
-    return AVAILABLE_SERVICES.filter(
-      (srv) =>
-        srv.name.toLowerCase().includes(raw) ||
-        srv.rate.toLowerCase().includes(raw) ||
-        (srv.keywords && srv.keywords.toLowerCase().includes(raw))
-    );
+    if (!raw) return PRIMARY_SERVICES;
+    return searchCatalog(raw, 'All');
   }, [serviceSearch]);
 
   useEffect(() => {
@@ -393,51 +387,125 @@ function OrderFormContent() {
                   </div>
                 </div>
 
-                {/* Available Service Cards with Color Gradients */}
-                <div className="grid grid-cols-2 gap-2">
-                  {filteredAvailableServices.map((srv) => {
-                    const isChecked = selectedServices.includes(srv.id);
-                    return (
-                      <label
-                        key={srv.id}
-                        onClick={() => toggleService(srv.id)}
-                        className={`relative flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
-                          isChecked
-                            ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-1.5 ring-[#008f51] shadow-xs'
-                            : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
-                        }`}
-                      >
-                        <div className="min-w-0 pr-1 flex items-center gap-1.5">
-                          <span className="text-base shrink-0">{srv.icon}</span>
-                          <div className="min-w-0">
-                            <span className="block text-[11.5px] sm:text-[12.5px] font-black text-[#072618] truncate leading-tight">
-                              {srv.name}
-                            </span>
-                            <span className="text-[10px] font-extrabold text-[#00874c]">
-                              {srv.rate}
-                            </span>
-                          </div>
-                        </div>
+                {/* Live search feedback if searching */}
+                {serviceSearch.trim() && (
+                  <div className="flex items-center justify-between text-[11px] text-[#4B5563] px-1">
+                    <span>
+                      Found <strong className="text-[#008f51]">{filteredAvailableServices.length}</strong> service{filteredAvailableServices.length === 1 ? '' : 's'} for &ldquo;{serviceSearch}&rdquo;
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsServicesModalOpen(true)}
+                      className="text-[#008f51] hover:underline font-bold cursor-pointer"
+                    >
+                      Browse in Popup &rarr;
+                    </button>
+                  </div>
+                )}
 
-                        <div
-                          className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                {/* Available Service Cards Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredAvailableServices.length === 0 ? (
+                    <div className="col-span-2 text-center py-6 px-3 bg-[#FAF6EE]/70 rounded-xl border border-dashed border-[#DECBB0]">
+                      <p className="text-xs font-semibold text-[#111827]">
+                        No service matching &ldquo;{serviceSearch}&rdquo;
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsServicesModalOpen(true)}
+                        className="mt-2 text-xs font-bold text-[#008f51] underline cursor-pointer"
+                      >
+                        Browse all 100+ services in popup &rarr;
+                      </button>
+                    </div>
+                  ) : (
+                    filteredAvailableServices.slice(0, serviceSearch ? 20 : 6).map((srv) => {
+                      const isChecked = selectedServices.includes(srv.id);
+                      return (
+                        <label
+                          key={srv.id}
+                          onClick={() => toggleService(srv.id)}
+                          className={`relative flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
                             isChecked
-                              ? 'bg-gradient-to-br from-[#008f51] to-[#05a862] border-[#008f51] text-white shadow-xs'
-                              : 'bg-white border-[#DECBB0]'
+                              ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-1.5 ring-[#008f51] shadow-xs'
+                              : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
                           }`}
                         >
-                          {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                        </div>
-                      </label>
-                    );
-                  })}
+                          <div className="min-w-0 pr-1 flex items-center gap-1.5">
+                            <span className="text-base shrink-0">{srv.icon}</span>
+                            <div className="min-w-0">
+                              <span className="block text-[11.5px] sm:text-[12.5px] font-bold text-[#072618] truncate leading-tight">
+                                {srv.name}
+                              </span>
+                              <span className="text-[10px] font-bold text-[#00874c]">
+                                {srv.rate}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                              isChecked
+                                ? 'bg-gradient-to-br from-[#008f51] to-[#05a862] border-[#008f51] text-white shadow-xs'
+                                : 'bg-white border-[#DECBB0]'
+                            }`}
+                          >
+                            {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
 
-                {/* Preselected Custom Plan Banner if from URL */}
-                {selectedServices.some((s) => !AVAILABLE_SERVICES.some((a) => a.id === s)) && (
-                  <div className="bg-gradient-to-r from-[#eaf9f1] via-[#d1fae5] to-[#eaf9f1] border border-[#a7f3d0] rounded-xl p-2.5 text-[11.5px] text-[#072618] flex items-center justify-between shadow-2xs">
-                    <span className="truncate">Selected Plan: <strong className="text-[#008f51] font-black">{selectedServices.find((s) => !AVAILABLE_SERVICES.some((a) => a.id === s))}</strong></span>
-                    <span className="text-[10px] font-black text-[#008f51] bg-white px-2 py-0.5 rounded-md border border-[#a7f3d0] shrink-0 ml-1">Configured</span>
+                {/* View More Services Button to open popup modal */}
+                <div className="pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsServicesModalOpen(true)}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#FAF6EE] to-[#ECE0C6] hover:from-[#ECE0C6] hover:to-[#decbb0]/70 border border-[#DECBB0] text-[#072618] font-bold text-xs flex items-center justify-center gap-2 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+                  >
+                    <span className="w-5 h-5 rounded-lg bg-[#008f51]/10 text-[#008f51] flex items-center justify-center text-xs font-bold">
+                      ⊞
+                    </span>
+                    <span>View More Services (100+ Catalog)</span>
+                    <span className="text-[#008f51] group-hover:translate-x-1 transition-transform">&rarr;</span>
+                  </button>
+                </div>
+
+                {/* Active Selected Services Badges / Chips */}
+                {selectedServices.length > 0 && (
+                  <div className="pt-2 border-t border-[#F3F4F6] space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-[#374151]">
+                        Selected ({selectedServices.length}):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedServices([])}
+                        className="text-[10px] text-rose-500 hover:text-rose-700 font-semibold cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                      {selectedServices.map((srvId) => (
+                        <span
+                          key={srvId}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-[#eaf8f1] text-[#006e3e] border border-[#a7f3d0] px-2.5 py-0.5 rounded-full shadow-2xs"
+                        >
+                          <span className="truncate max-w-[200px]">{srvId}</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleService(srvId)}
+                            className="text-[#006e3e]/70 hover:text-rose-600 rounded-full hover:bg-rose-100 p-0.5 transition-colors cursor-pointer"
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -753,6 +821,15 @@ function OrderFormContent() {
           </div>
         )}
       </div>
+
+      {/* Full Services & Garments Catalog Popup Modal */}
+      <AllServicesModal
+        isOpen={isServicesModalOpen}
+        onClose={() => setIsServicesModalOpen(false)}
+        selectedServices={selectedServices}
+        onToggleService={toggleService}
+        onClearAllServices={() => setSelectedServices([])}
+      />
 
     </div>
   );
