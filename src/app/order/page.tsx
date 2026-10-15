@@ -28,6 +28,11 @@ import {
   validateAddress,
 } from '@/lib/validation';
 import {
+  getMinSelectableDateString,
+  getActiveSlotsList,
+  getDefaultSlotForDate,
+} from '@/lib/slotAvailability';
+import {
   PRIMARY_SERVICES,
   ALL_SERVICES_CATALOG,
   searchCatalog,
@@ -47,16 +52,25 @@ function OrderFormContent() {
   const [serviceSearch, setServiceSearch] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [pin, setPin] = useState('400706');
-  const [building, setBuilding] = useState('');
   const [address, setAddress] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('Morning (9 AM - 12 PM)');
+  const [pin, setPin] = useState('400706');
+  const [building, setBuilding] = useState('');
+  const initialMinDate = getMinSelectableDateString();
+  const [date, setDate] = useState(initialMinDate);
+  const [time, setTime] = useState(getDefaultSlotForDate(initialMinDate));
   const [contact, setContact] = useState<'WhatsApp' | 'Phone Call'>('WhatsApp');
   const [items, setItems] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate);
+    const validSlots = getActiveSlotsList(newDate);
+    if (!validSlots.some((s) => s.value === time)) {
+      setTime(validSlots[0]?.value || '');
+    }
+  };
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
   const [isServicesModalOpen, setIsServicesModalOpen] = useState(false);
@@ -711,8 +725,9 @@ function OrderFormContent() {
                       <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA3AF]" />
                       <input
                         type="date"
+                        min={getMinSelectableDateString()}
                         value={date}
-                        onChange={(e) => setDate(e.target.value)}
+                        onChange={(e) => handleDateChange(e.target.value)}
                         className="w-full h-10 pl-8 pr-2 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12px] text-[#111827] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                       />
                     </div>
@@ -729,10 +744,11 @@ function OrderFormContent() {
                         onChange={(e) => setTime(e.target.value)}
                         className="w-full h-10 pl-8 pr-2 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[11.5px] text-[#111827] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                       >
-                        <option value="Morning (9 AM - 12 PM)">Morning (9 - 12)</option>
-                        <option value="Afternoon (12 PM - 4 PM)">Afternoon (12 - 4)</option>
-                        <option value="Evening (4 PM - 8 PM)">Evening (4 - 8)</option>
-                        <option value="Flexible / Call Before">Flexible Slot</option>
+                        {getActiveSlotsList(date).map((s) => (
+                          <option key={s.value} value={s.value}>
+                            {s.shortLabel}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

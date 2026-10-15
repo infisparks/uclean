@@ -43,6 +43,14 @@ import {
   Eye,
   LayoutGrid,
   List,
+  PanelRightClose,
+  PanelRightOpen,
+  LayoutDashboard,
+  Home,
+  BarChart3,
+  Users,
+  Settings,
+  Menu,
 } from 'lucide-react';
 import {
   sendWhatsAppMessage,
@@ -57,6 +65,12 @@ import {
   validateCustomerName,
   validateAddress,
 } from '@/lib/validation';
+import {
+  getMinSelectableDateString,
+  getLocalTodayDateString,
+  getActiveSlotsList,
+  getDefaultSlotForDate,
+} from '@/lib/slotAvailability';
 
 export interface CrmOrder {
   id: string;
@@ -96,7 +110,7 @@ interface ChatMessage {
   sender: 'store' | 'customer';
   text: string;
   time: string;
-  status: 'sent' | 'delivered';
+  status: 'pending' | 'sent' | 'delivered' | 'failed';
 }
 
 const ORDER_LIFECYCLE_STEPS = [
@@ -204,6 +218,27 @@ function playNewOrderSound() {
   }
 }
 
+// Helper to merge orders non-destructively: guarantees Firebase bookings are never lost or wiped out
+function mergeOrdersList(existing: CrmOrder[], incoming: CrmOrder[]): CrmOrder[] {
+  const map = new Map<string, CrmOrder>();
+  // 1. Existing orders
+  for (const o of existing) {
+    if (o && o.id) map.set(o.id, o);
+  }
+  // 2. Incoming orders (overlay changes from incoming)
+  for (const o of incoming) {
+    if (o && o.id) {
+      const prev = map.get(o.id);
+      map.set(o.id, prev ? { ...prev, ...o } : o);
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+    const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+    return timeB - timeA;
+  });
+}
+
 export function CrmPortal({
   onBackToStore,
   onLogout,
@@ -238,7 +273,7 @@ export function CrmPortal({
   const [newCustPhone, setNewCustPhone] = useState('');
   const [newCustService, setNewCustService] = useState('Wash & Steam Iron');
   const [newCustAddress, setNewCustAddress] = useState('');
-  const [newCustSlot, setNewCustSlot] = useState('Today · 02:00 PM – 04:00 PM');
+  const [newCustSlot, setNewCustSlot] = useState(() => getDefaultSlotForDate(getLocalTodayDateString()));
   const [newCustNotes, setNewCustNotes] = useState('');
   const [newCustAmount, setNewCustAmount] = useState('149');
   const [newCustNameError, setNewCustNameError] = useState('');
@@ -269,7 +304,7 @@ export function CrmPortal({
     return s;
   }
 
-  // Open the detail sidebar drawer for any contact / order
+  // Open the detail sidebar drawer for any contact / order (slide-over modal)
   const handleOpenSidebar = (ord: CrmOrder) => {
     setSelectedOrder(ord);
     setIsSidebarOpen(true);
@@ -320,14 +355,16 @@ export function CrmPortal({
           });
 
           if (isMounted) {
-            // Sound chime if new booking arrives live
-            if (previousOrderCount.current > 0 && mapped.length > previousOrderCount.current && soundEnabled) {
-              playNewOrderSound();
-              showToast('🔔 New Customer Booking Received!', 'success');
-            }
-            previousOrderCount.current = mapped.length;
-
-            setOrders(mapped);
+            setOrders((prev) => {
+              const merged = mergeOrdersList(prev, mapped);
+              // Sound chime if new booking arrives live
+              if (previousOrderCount.current > 0 && merged.length > previousOrderCount.current && soundEnabled) {
+                playNewOrderSound();
+                showToast('🔔 New Customer Booking Received!', 'success');
+              }
+              previousOrderCount.current = merged.length;
+              return merged;
+            });
 
             // Keep selected order updated
             setSelectedOrder((prev) => {
@@ -381,11 +418,7 @@ export function CrmPortal({
               .reverse();
 
             if (isMounted && rtdbList.length > 0) {
-              setOrders((prev) => {
-                const rtdbIds = new Set(rtdbList.map((o) => o.id));
-                const remaining = prev.filter((o) => !rtdbIds.has(o.id));
-                return [...rtdbList, ...remaining];
-              });
+              setOrders((prev) => mergeOrdersList(prev, rtdbList));
             }
           }
         },
@@ -404,12 +437,18 @@ export function CrmPortal({
 
   // Operational KPI Counters
   const opsCounters = useMemo(() => {
+    const todayStr = getLocalTodayDateString();
     const callsPending = orders.filter((o) => o.status === 'New Request' || !o.callDone);
-    const pickupsToday = orders.filter(
-      (o) =>
-        (o.slot.toLowerCase().includes('today') || o.date?.toLowerCase().includes('today')) &&
-        ['New Request', 'Call Confirmed', 'Pickup Assigned'].includes(o.status)
-    );
+    const pickupsToday = orders.filter((o) => {
+      const slotLower = (o.slot || '').toLowerCase();
+      const dateStr = o.date || '';
+      const isToday =
+        slotLower.includes('today') ||
+        dateStr.toLowerCase().includes('today') ||
+        dateStr === todayStr ||
+        slotLower.includes(todayStr);
+      return isToday && ['New Request', 'Call Confirmed', 'Pickup Assigned'].includes(o.status);
+    });
     const inCleaning = orders.filter((o) =>
       ['Picked Up', 'At Store / Inspection', 'Quotation Sent', 'Cleaning In Progress', 'Quality Check'].includes(o.status)
     );
@@ -431,15 +470,16 @@ export function CrmPortal({
 
   // Filtered & Sorted orders
   const filteredOrders = useMemo(() => {
+    const todayStr = getLocalTodayDateString();
     const list = orders.filter((o) => {
       const q = search.toLowerCase().trim();
       const matchQuery =
         !q ||
-        o.id.toLowerCase().includes(q) ||
-        o.name.toLowerCase().includes(q) ||
-        o.phone.toLowerCase().includes(q) ||
-        o.address.toLowerCase().includes(q) ||
-        o.service.toLowerCase().includes(q);
+        (o.id?.toLowerCase().includes(q) ?? false) ||
+        (o.name?.toLowerCase().includes(q) ?? false) ||
+        (o.phone?.toLowerCase().includes(q) ?? false) ||
+        (o.address?.toLowerCase().includes(q) ?? false) ||
+        (o.service?.toLowerCase().includes(q) ?? false);
 
       if (!matchQuery) return false;
 
@@ -447,10 +487,14 @@ export function CrmPortal({
         return o.status === 'New Request' || !o.callDone;
       }
       if (activeNav === 'pickups') {
-        return (
-          (o.slot.toLowerCase().includes('today') || o.date?.toLowerCase().includes('today')) &&
-          ['New Request', 'Call Confirmed', 'Pickup Assigned'].includes(o.status)
-        );
+        const slotLower = (o.slot || '').toLowerCase();
+        const dateStr = o.date || '';
+        const isToday =
+          slotLower.includes('today') ||
+          dateStr.toLowerCase().includes('today') ||
+          dateStr === todayStr ||
+          slotLower.includes(todayStr);
+        return isToday && ['New Request', 'Call Confirmed', 'Pickup Assigned'].includes(o.status);
       }
       if (activeNav === 'cleaning') {
         return ['Picked Up', 'At Store / Inspection', 'Quotation Sent', 'Cleaning In Progress', 'Quality Check'].includes(o.status);
@@ -470,13 +514,13 @@ export function CrmPortal({
     // Sorting
     return list.sort((a, b) => {
       if (sortOption === 'amount_high') {
-        const valA = parseFloat(a.total.replace(/[^\d.]/g, '')) || 0;
-        const valB = parseFloat(b.total.replace(/[^\d.]/g, '')) || 0;
+        const valA = parseFloat((a.total || '').replace(/[^\d.]/g, '')) || 0;
+        const valB = parseFloat((b.total || '').replace(/[^\d.]/g, '')) || 0;
         return valB - valA;
       }
       if (sortOption === 'amount_low') {
-        const valA = parseFloat(a.total.replace(/[^\d.]/g, '')) || 0;
-        const valB = parseFloat(b.total.replace(/[^\d.]/g, '')) || 0;
+        const valA = parseFloat((a.total || '').replace(/[^\d.]/g, '')) || 0;
+        const valB = parseFloat((b.total || '').replace(/[^\d.]/g, '')) || 0;
         return valA - valB;
       }
       if (sortOption === 'oldest') {
@@ -490,6 +534,13 @@ export function CrmPortal({
       return timeB - timeA;
     });
   }, [orders, search, activeNav, sortOption]);
+
+  // Auto-select first order if none selected (for industry CRM docked right panel)
+  useEffect(() => {
+    if (!selectedOrder && filteredOrders.length > 0) {
+      setSelectedOrder(filteredOrders[0]);
+    }
+  }, [filteredOrders, selectedOrder]);
 
   // Color config for badges
   const getStatusConfig = (status: string) => {
@@ -894,7 +945,7 @@ export function CrmPortal({
     }
   };
 
-  // Send WhatsApp message
+  // Send WhatsApp message (Instantaneous Optimistic UI + fast background API dispatch)
   const handleSendWhatsAppMessage = async () => {
     if (!selectedOrder?.phone) {
       showToast('Customer phone number is missing!', 'error');
@@ -906,35 +957,62 @@ export function CrmPortal({
       return;
     }
 
-    setSendingWa(true);
-    try {
-      const res = await sendWhatsAppMessage(selectedOrder.phone, textToSend);
-      if (res.success) {
-        const newMsg: ChatMessage = {
-          id: 'MSG-' + Date.now(),
-          sender: 'store',
-          text: textToSend,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: 'delivered',
-        };
+    const orderId = selectedOrder.id;
+    const phone = selectedOrder.phone;
+    const name = selectedOrder.name;
+    const tempId = 'MSG-' + Date.now();
 
+    // 1. INSTANT 0ms OPTIMISTIC UI: Immediately add message bubble into the chat!
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      sender: 'store',
+      text: textToSend,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'pending',
+    };
+
+    setChatHistory((prev) => ({
+      ...prev,
+      [orderId]: [...(prev[orderId] || []), optimisticMsg],
+    }));
+
+    // Clear textarea immediately so user can keep typing without feeling stuck
+    setWaInputMessage('');
+    setSendingWa(true);
+
+    try {
+      const res = await sendWhatsAppMessage(phone, textToSend);
+      if (res.success) {
+        // Upgrade checkmark to official WhatsApp blue double-check ✓✓
         setChatHistory((prev) => ({
           ...prev,
-          [selectedOrder.id]: [...(prev[selectedOrder.id] || []), newMsg],
+          [orderId]: (prev[orderId] || []).map((m) =>
+            m.id === tempId ? { ...m, status: 'delivered' } : m
+          ),
         }));
-
-        setWaInputMessage('');
-        showToast(`WhatsApp message delivered to ${selectedOrder.name}!`, 'success');
+        showToast(`WhatsApp message delivered to ${name}!`, 'success');
       } else {
+        setChatHistory((prev) => ({
+          ...prev,
+          [orderId]: (prev[orderId] || []).map((m) =>
+            m.id === tempId ? { ...m, status: 'failed' } : m
+          ),
+        }));
         showToast(`Delivery note: ${res.message || 'WhatsApp Web opened'}`, 'info');
         window.open(
-          `https://wa.me/${selectedOrder.phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
+          `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
           '_blank'
         );
       }
     } catch {
+      setChatHistory((prev) => ({
+        ...prev,
+        [orderId]: (prev[orderId] || []).map((m) =>
+          m.id === tempId ? { ...m, status: 'failed' } : m
+        ),
+      }));
       window.open(
-        `https://wa.me/${selectedOrder.phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
+        `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
         '_blank'
       );
     } finally {
@@ -1020,32 +1098,648 @@ export function CrmPortal({
     copyToClipboard(text, 'Rider Dispatch Slip');
   };
 
+  // Helper: Get lifecycle step index
+  const getLifecycleIndex = (status: string) => {
+    if (status === 'New Request') return 0;
+    if (status === 'Call Confirmed' || status === 'Pickup Assigned') return 1;
+    if (status === 'Picked Up') return 2;
+    if (status === 'At Store / Inspection' || status === 'Quotation Sent') return 3;
+    if (status === 'Cleaning In Progress' || status === 'Quality Check') return 4;
+    if (status === 'Ready for Delivery' || status === 'Out for Delivery') return 5;
+    if (status === 'Delivered') return 6;
+    return -1; // Cancelled or unknown
+  };
+
   // Current lifecycle index for selected order
   const currentLifecycleIndex = useMemo(() => {
     if (!selectedOrder) return 0;
-    const current = selectedOrder.status;
-    if (current === 'New Request') return 0;
-    if (current === 'Call Confirmed' || current === 'Pickup Assigned') return 1;
-    if (current === 'Picked Up') return 2;
-    if (current === 'At Store / Inspection' || current === 'Quotation Sent') return 3;
-    if (current === 'Cleaning In Progress' || current === 'Quality Check') return 4;
-    if (current === 'Ready for Delivery' || current === 'Out for Delivery') return 5;
-    if (current === 'Delivered') return 6;
-    return -1; // Cancelled or unknown
+    return getLifecycleIndex(selectedOrder.status);
   }, [selectedOrder]);
+
+  // Render Client Detail Content for Slide-Over Drawer
+  const renderOrderDetailContent = (ord: CrmOrder) => {
+    const timeInfo = formatBookingTimestamp(ord.createdAt || ord.timestamp);
+    const cfg = getStatusConfig(ord.status);
+    const lifeIdx = getLifecycleIndex(ord.status);
+
+    return (
+      <div className="flex flex-col h-full overflow-hidden bg-white">
+        {/* Drawer Header */}
+        <div className="p-3.5 px-4 sm:p-4 sm:px-5 border-b border-slate-200/90 bg-slate-900 text-white flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
+              {ord.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-xs font-bold text-slate-200 bg-white/10 px-2 py-0.5 rounded border border-white/20">
+                  #{ord.id}
+                </span>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 shrink-0 ${
+                    cfg.pillBg
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                  <span className="whitespace-nowrap">{ord.status}</span>
+                </span>
+              </div>
+              <h2 className="font-heading font-black text-base sm:text-lg text-white mt-0.5 leading-tight truncate">
+                {ord.name}
+              </h2>
+            </div>
+          </div>
+
+          <button
+            onClick={handleCloseSidebar}
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer shrink-0 ml-2"
+            title="Close Panel"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          
+          {/* Booking Timing Card */}
+          <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-blue-50/90 p-3.5 sm:p-4 rounded-2xl border border-blue-200/90 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-extrabold text-[11px] uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                Customer Booking Timing
+              </span>
+              <span className="font-mono font-bold text-xs text-blue-800 bg-white/80 px-2 py-0.5 rounded border border-blue-200">
+                {timeInfo.timeAgo}
+              </span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-blue-100 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold text-slate-500 uppercase block">
+                  Order Placed At:
+                </span>
+                <span className="font-heading font-black text-xs sm:text-sm text-slate-900">
+                  {timeInfo.fullDateTime}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase block">
+                  Requested Slot:
+                </span>
+                <span className="text-xs font-bold text-blue-700">
+                  {ord.slot}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Operational Lifecycle Action Hub */}
+          <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50 rounded-2xl border border-slate-200/90 p-3.5 sm:p-4 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span>Next Action (Operational Stage)</span>
+              </span>
+              <span
+                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 shrink-0 ${
+                  cfg.pillBg
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                <span className="whitespace-nowrap">{ord.status}</span>
+              </span>
+            </div>
+
+            {/* Guidance banner based on status */}
+            {ord.status === 'New Request' && (
+              <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-amber-200/80 flex items-center justify-center shrink-0 text-amber-800 font-black text-xs">
+                  1
+                </div>
+                <div>
+                  <p className="font-bold text-amber-950">Step 1: Customer Call Verification Pending</p>
+                  <p className="text-[11px] text-amber-800">Call customer to verify order and confirm pickup schedule.</p>
+                </div>
+              </div>
+            )}
+
+            {ord.status === 'Call Confirmed' && (
+              <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200 text-blue-900 text-xs flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-blue-200/80 flex items-center justify-center shrink-0 text-blue-800 font-black text-xs">
+                  2
+                </div>
+                <div>
+                  <p className="font-bold text-blue-950">Step 2: Call Confirmed ✓ — Schedule Pickup</p>
+                  <p className="text-[11px] text-blue-800">Call is confirmed. Assign a rider or record collection directly.</p>
+                </div>
+              </div>
+            )}
+
+            {ord.status === 'Pickup Assigned' && (
+              <div className="p-2.5 rounded-xl bg-indigo-50/90 border border-indigo-200 text-indigo-900 text-xs flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-indigo-200/80 flex items-center justify-center shrink-0 text-indigo-800 font-black text-xs">
+                  3
+                </div>
+                <div>
+                  <p className="font-bold text-indigo-950">Step 3: Rider Dispatched — Doorstep Collection</p>
+                  <p className="text-[11px] text-indigo-800">Rider dispatched to customer address. Click 'Picked Up' once clothes are received.</p>
+                </div>
+              </div>
+            )}
+
+            {['Picked Up', 'At Store / Inspection'].includes(ord.status) && (
+              <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-emerald-200/80 flex items-center justify-center shrink-0 text-emerald-800 font-black text-xs">
+                  ✓
+                </div>
+                <div>
+                  <p className="font-bold text-emerald-950">Clothes Received at Store / Workshop!</p>
+                  <p className="text-[11px] text-emerald-800">Begin inspection and cleaning workflow.</p>
+                </div>
+              </div>
+            )}
+
+            {ord.status === 'Cancelled' && (
+              <div className="p-2.5 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-rose-200/80 flex items-center justify-center shrink-0 text-rose-800 font-black text-xs">
+                  ✕
+                </div>
+                <div>
+                  <p className="font-bold text-rose-950">Order Cancelled</p>
+                  <p className="text-[11px] text-rose-800">This order has been cancelled. Click below to reactivate if needed.</p>
+                </div>
+              </div>
+            )}
+
+            {/* 3 Step Action Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+              {/* Step 1: Confirm Call */}
+              <button
+                onClick={() => handleMarkCallDone(ord)}
+                className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
+                  ord.callDone || ['Call Confirmed', 'Pickup Assigned', 'Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(ord.status)
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                    : ord.status === 'New Request'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs ring-2 ring-blue-400/50'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+                title="1. Confirm call with customer"
+              >
+                {ord.callDone || ord.status !== 'New Request' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                ) : (
+                  <PhoneCall className="w-3.5 h-3.5 text-white shrink-0" />
+                )}
+                <span className="whitespace-nowrap">
+                  {ord.callDone || ord.status !== 'New Request'
+                    ? 'Call Confirmed ✓'
+                    : '1. Confirm Call'}
+                </span>
+              </button>
+
+              {/* Step 2: Assign Pickup */}
+              <button
+                onClick={() => handleAssignPickup(ord)}
+                className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
+                  ord.status === 'Pickup Assigned'
+                    ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400/50'
+                    : ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(ord.status)
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
+                    : ord.status === 'Call Confirmed'
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs ring-2 ring-amber-300'
+                    : 'bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-800 border border-slate-200'
+                }`}
+                title="2. Assign rider to collect clothes"
+              >
+                <Truck className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">
+                  {ord.status === 'Pickup Assigned'
+                    ? 'Rider Assigned ✓'
+                    : ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(ord.status)
+                    ? 'Pickup Done ✓'
+                    : '2. Assign Pickup'}
+                </span>
+              </button>
+
+              {/* Step 3: Picked Up */}
+              <button
+                onClick={() => handleMarkPickupDone(ord)}
+                className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
+                  ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(ord.status)
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                    : ord.status === 'Pickup Assigned' || ord.status === 'Call Confirmed'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs ring-2 ring-emerald-400/50'
+                    : 'bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200'
+                }`}
+                title="3. Mark clothes collected from customer"
+              >
+                <Package className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">
+                  {['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(ord.status)
+                    ? 'Picked Up ✓'
+                    : '3. Mark Picked Up'}
+                </span>
+              </button>
+            </div>
+
+            {/* Additional next step for workshop if clothes already picked up */}
+            {['Picked Up', 'At Store / Inspection'].includes(ord.status) && (
+              <div className="pt-1 flex items-center gap-2">
+                <button
+                  onClick={() => handleStartCleaning(ord)}
+                  className="flex-1 h-9 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Start Washing / Cleaning</span>
+                </button>
+              </div>
+            )}
+
+            {/* Secondary Row: Safe Cancellation / Reactivate Options */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+              {ord.status === 'Cancelled' ? (
+                <button
+                  onClick={() => handleReactivateOrder(ord)}
+                  className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3 shrink-0" />
+                  <span className="whitespace-nowrap">Reactivate Order</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleCancelOrder(ord)}
+                  className="h-8 px-2.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 font-semibold text-[11px] inline-flex items-center gap-1.5 border border-slate-200 hover:border-rose-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  title="Cancel this order if customer declined"
+                >
+                  <Ban className="w-3 h-3 text-rose-500 shrink-0" />
+                  <span className="whitespace-nowrap">Cancel Order</span>
+                </button>
+              )}
+
+              <span className="text-[10px] text-slate-400 font-medium ml-auto hidden sm:inline">
+                Status: {ord.status}
+              </span>
+            </div>
+          </div>
+
+          {/* Direct Communications Strip (Call, WhatsApp, Print Slip) */}
+          <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
+            <a
+              href={`tel:${ord.phone}`}
+              className="flex-1 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs inline-flex items-center justify-center gap-1.5 border border-slate-200 transition-colors whitespace-nowrap shrink-0"
+            >
+              <Phone className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="whitespace-nowrap truncate">Call {ord.phone}</span>
+            </a>
+
+            <button
+              onClick={() => openWhatsAppDrawer(ord, 1)}
+              className="flex-1 h-9 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">WhatsApp Chat</span>
+            </button>
+
+            <button
+              onClick={() => handlePrintRiderSlip(ord)}
+              className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs inline-flex items-center justify-center gap-1 border border-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              title="Print Thermal / Rider Pickup Slip"
+            >
+              <Printer className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Print Slip</span>
+            </button>
+          </div>
+
+          {/* Order Lifecycle Visual Progress Stepper */}
+          <div className="bg-slate-50/90 p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span className="text-[11px] uppercase tracking-wider text-slate-500">
+                Order Lifecycle Pipeline
+              </span>
+              {ord.status === 'Cancelled' ? (
+                <span className="text-rose-600 font-bold text-[11px]">
+                  STATUS: CANCELLED
+                </span>
+              ) : (
+                <span className="text-blue-700 font-mono text-[11px]">
+                  Step {lifeIdx + 1} of 7
+                </span>
+              )}
+            </div>
+
+            {/* Stepper Dots */}
+            <div className="grid grid-cols-7 gap-1 pt-1">
+              {ORDER_LIFECYCLE_STEPS.map((step, idx) => {
+                const isDone = idx < lifeIdx;
+                const isCurrent = idx === lifeIdx;
+
+                return (
+                  <button
+                    key={step.key}
+                    onClick={() => handleStatusChange(ord.id, step.key)}
+                    className={`group flex flex-col items-center text-center p-1 rounded-lg transition-all ${
+                      isCurrent ? 'bg-blue-600/10' : 'hover:bg-slate-200/50'
+                    }`}
+                    title={`Click to set status to ${step.label}`}
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono transition-all ${
+                        isDone
+                          ? 'bg-emerald-600 text-white'
+                          : isCurrent
+                          ? 'bg-blue-600 text-white ring-2 ring-blue-400/40 shadow-xs'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {isDone ? <Check className="w-3 h-3" /> : idx + 1}
+                    </div>
+                    <span
+                      className={`text-[9.5px] mt-1 font-semibold truncate max-w-full ${
+                        isCurrent
+                          ? 'text-blue-700 font-black'
+                          : isDone
+                          ? 'text-emerald-700'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      {step.short}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {ord.status === 'Cancelled' && (
+              <div className="mt-2 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>This booking is marked as <b>Cancelled</b>. Click any step above to reactivate.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Customer Pickup Address & Maps */}
+          <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                Pickup Address
+              </span>
+              <button
+                onClick={() => copyToClipboard(ord.address, 'Address')}
+                className="text-[10.5px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-0.5 cursor-pointer"
+              >
+                <Copy className="w-3 h-3" />
+                <span>Copy</span>
+              </button>
+            </div>
+            <p className="font-semibold text-slate-900 leading-relaxed">
+              {ord.address || 'Address not provided'}
+            </p>
+            <div className="pt-1 flex items-center justify-between">
+              <a
+                href={`https://maps.google.com/?q=${encodeURIComponent(
+                  `${ord.address}, Nerul West, Navi Mumbai`
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-bold"
+              >
+                <Navigation className="w-3 h-3" />
+                <span>Open in Google Maps &rarr;</span>
+              </a>
+              <button
+                onClick={() => handleCopyRiderDispatch(ord)}
+                className="text-[11px] text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <Copy className="w-3 h-3" />
+                <span>Copy Rider Slip</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Garments & Services Package */}
+          <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                <Package className="w-3.5 h-3.5 text-slate-400" />
+                Garment &amp; Service Package
+              </span>
+              <span className="font-mono font-bold text-slate-900">
+                Estimate: {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
+              </span>
+            </div>
+            <p className="font-bold text-slate-900 text-sm">
+              {ord.service} {ord.items ? `— ${ord.items}` : ''}
+            </p>
+            {ord.notes && (
+              <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 italic">
+                &quot;{ord.notes}&quot;
+              </div>
+            )}
+          </div>
+
+          {/* WhatsApp Notification Action Cards */}
+          <div className="space-y-2 pt-2 border-t border-slate-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">
+              Send WhatsApp Customer Updates:
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {/* Template 1: Pickup Confirmed */}
+              <button
+                onClick={() => openWhatsAppDrawer(ord, 1)}
+                className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200 hover:border-blue-300 text-left transition-all active:scale-98 group cursor-pointer"
+              >
+                <span className="text-[9.5px] font-bold uppercase tracking-wide text-blue-700 block">
+                  Template 1
+                </span>
+                <h5 className="font-bold text-xs text-slate-900 group-hover:text-blue-900 mt-0.5">
+                  Pickup Confirmed
+                </h5>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Send receipt
+                </p>
+              </button>
+
+              {/* Template 2: Send Quotation */}
+              <button
+                onClick={() => openWhatsAppDrawer(ord, 2)}
+                className="p-3 rounded-2xl bg-slate-50 hover:bg-purple-50/60 border border-slate-200 hover:border-purple-300 text-left transition-all active:scale-98 group cursor-pointer"
+              >
+                <span className="text-[9.5px] font-bold uppercase tracking-wide text-purple-700 block">
+                  Template 2
+                </span>
+                <h5 className="font-bold text-xs text-slate-900 group-hover:text-purple-900 mt-0.5">
+                  Send Quotation
+                </h5>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Garment price
+                </p>
+              </button>
+
+              {/* Template 3: Ready for Delivery */}
+              <button
+                onClick={() => openWhatsAppDrawer(ord, 3)}
+                className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 text-left transition-all active:scale-98 group cursor-pointer"
+              >
+                <span className="text-[9.5px] font-bold uppercase tracking-wide text-emerald-700 block">
+                  Template 3
+                </span>
+                <h5 className="font-bold text-xs text-slate-900 group-hover:text-emerald-900 mt-0.5">
+                  Ready for Delivery
+                </h5>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Delivery notice
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Status Transition Selector */}
+          <div className="space-y-2 pt-2 border-t border-slate-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">
+              Change Status Directly:
+            </span>
+
+            <div className="space-y-2">
+              {STATUS_GROUPS.map((grp) => (
+                <div key={grp.group} className="space-y-1">
+                  <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                    <span>{grp.group}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {grp.statuses.map((st) => {
+                      const isCurrent = ord.status === st;
+                      const statusCfg = getStatusConfig(st);
+
+                      return (
+                        <button
+                          key={st}
+                          onClick={() => handleStatusChange(ord.id, st)}
+                          className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isCurrent
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${isCurrent ? 'bg-white' : statusCfg.dot}`} />
+                          <span>{st}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Delete Order option */}
+          <div className="pt-3 border-t border-slate-200 flex justify-end">
+            <button
+              onClick={() => handleDeleteOrder(ord.id)}
+              className="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete This Order Permanently</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
+  // Unique Customers aggregated from bookings
+  const uniqueCustomers = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        name: string;
+        phone: string;
+        address: string;
+        ordersCount: number;
+        totalSpent: number;
+        latestDate: string;
+        latestStatus: string;
+      }
+    >();
+    for (const o of orders) {
+      const key = (o.phone || o.name || '').trim();
+      if (!key) continue;
+      const existing = map.get(key);
+      const amount = parseFloat((o.total || '').replace(/[^\d.]/g, '')) || 0;
+      if (existing) {
+        existing.ordersCount += 1;
+        existing.totalSpent += amount;
+        const curTime = new Date(o.createdAt || o.timestamp || 0).getTime();
+        const prevTime = new Date(existing.latestDate || 0).getTime();
+        if (curTime > prevTime) {
+          existing.latestDate = o.createdAt || o.timestamp || '';
+          existing.address = o.address || existing.address;
+          existing.latestStatus = o.status;
+        }
+      } else {
+        map.set(key, {
+          name: o.name,
+          phone: o.phone,
+          address: o.address,
+          ordersCount: 1,
+          totalSpent: amount,
+          latestDate: o.createdAt || o.timestamp || '',
+          latestStatus: o.status,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.ordersCount - a.ordersCount);
+  }, [orders]);
+
+  // Fleet Drivers Dispatch Data
+  const fleetDrivers = [
+    {
+      id: 'D-01',
+      name: 'Rahul Sharma',
+      phone: '9820198201',
+      vehicle: 'Hero Nyx Electric (MH-43-BE-4102)',
+      zone: 'Nerul West & Seawoods',
+      status: 'On Active Route',
+      assignedPickups: orders.filter((o) => o.status === 'Pickup Assigned').slice(0, 3),
+      completedToday: 8,
+      rating: '4.9 ★',
+    },
+    {
+      id: 'D-02',
+      name: 'Amit Verma',
+      phone: '9819234812',
+      vehicle: 'TVS iQube (MH-43-CF-7811)',
+      zone: 'Palm Beach Road & Sector 6',
+      status: 'Available at Store',
+      assignedPickups: orders.filter((o) => o.status === 'Ready for Delivery').slice(0, 2),
+      completedToday: 6,
+      rating: '4.8 ★',
+    },
+    {
+      id: 'D-03',
+      name: 'Vikram Singh',
+      phone: '9821876543',
+      vehicle: 'Bajaj Chetak EV (MH-43-DA-2041)',
+      zone: 'Nerul East & Sector 19',
+      status: 'On Delivery Run',
+      assignedPickups: orders.filter((o) => o.status === 'Out for Delivery').slice(0, 2),
+      completedToday: 5,
+      rating: '5.0 ★',
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
-      
-      {/* ========================================================================= */}
       {/* 1. TOP EXECUTIVE CRM CONTROL BAR */}
-      {/* ========================================================================= */}
-      <header className="bg-white border-b border-slate-200/90 sticky top-0 z-30 shadow-xs">
+      <header className="bg-white border-b border-slate-200/90 sticky top-0 z-20 shadow-xs">
         <div className="w-full max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
           
-          {/* Brand & Live Indicator */}
+          {/* Brand & Storefront Return */}
           <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               <button
                 onClick={onBackToStore}
                 className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer shrink-0"
@@ -1054,92 +1748,92 @@ export function CrmPortal({
                 <ArrowLeft className="w-4 h-4 shrink-0" />
               </button>
 
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-900 flex items-center justify-center font-black text-white text-base shadow-sm shrink-0">
-                  U
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <h1 className="font-heading font-black text-sm sm:text-base text-slate-900 leading-tight whitespace-nowrap">
-                      UCLEAN CRM
-                    </h1>
-                    <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      Live Cloud Sync
-                    </span>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-900 flex items-center justify-center font-black text-white text-base shadow-sm shrink-0">
+                    U
                   </div>
-                  <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate">
-                    Nerul West &bull; Store Dispatch Desk
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <h1 className="font-heading font-black text-sm sm:text-base text-slate-900 leading-tight whitespace-nowrap">
+                        UCLEAN CRM
+                      </h1>
+                      <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                        Live Cloud Sync
+                      </span>
+                    </div>
+                    <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate">
+                      Nerul West &bull; Store Dispatch Desk
+                    </p>
+                  </div>
                 </div>
+              </div>
+
+              {/* Quick Order Button for Mobile Top Bar */}
+              <div className="flex items-center gap-1.5 md:hidden">
+                <button
+                  onClick={() => setNewOrderModalOpen(true)}
+                  className="h-8 px-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">+ Order</span>
+                </button>
               </div>
             </div>
 
-            {/* Quick Order Button for Mobile Top Bar */}
-            <div className="flex items-center gap-1.5 md:hidden">
-              <button
-                onClick={() => setNewOrderModalOpen(true)}
-                className="h-8 px-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 shrink-0" />
-                <span className="whitespace-nowrap">+ Order</span>
-              </button>
+            {/* Search Bar */}
+            <div className="w-full md:flex-1 md:max-w-md md:mx-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search customer, mobile, ID, address..."
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300/80 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition-all"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Search Bar */}
-          <div className="w-full md:flex-1 md:max-w-md md:mx-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 shrink-0" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search customer, mobile, ID, address..."
-                className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300/80 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition-all"
-              />
-              {search && (
+            {/* Action Tools */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none w-full md:w-auto shrink-0">
+              {/* View Mode Toggle */}
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0">
                 <button
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                  title="Clear search"
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all ${
+                    viewMode === 'table' ? 'bg-white shadow-xs text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Table List View"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <List className="w-3.5 h-3.5 shrink-0" />
                 </button>
-              )}
-            </div>
-          </div>
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`p-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all ${
+                    viewMode === 'cards' ? 'bg-white shadow-xs text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Cards Grid View"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+                </button>
+              </div>
 
-          {/* Action Tools */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none w-full md:w-auto shrink-0">
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0">
+              {/* Sound notification toggle */}
               <button
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all ${
-                  viewMode === 'table' ? 'bg-white shadow-xs text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Table List View"
-              >
-                <List className="w-3.5 h-3.5 shrink-0" />
-              </button>
-              <button
-                onClick={() => setViewMode('cards')}
-                className={`p-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all ${
-                  viewMode === 'cards' ? 'bg-white shadow-xs text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Cards Grid View"
-              >
-                <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
-              </button>
-            </div>
-
-            {/* Sound notification toggle */}
-            <button
-              onClick={() => {
-                setSoundEnabled(!soundEnabled);
-                showToast(soundEnabled ? 'Chime alerts muted' : 'Chime alerts activated', 'info');
-              }}
+                onClick={() => {
+                  setSoundEnabled(!soundEnabled);
+                  showToast(soundEnabled ? 'Chime alerts muted' : 'Chime alerts activated', 'info');
+                }}
               className={`p-2 rounded-xl border transition-colors shrink-0 ${
                 soundEnabled
                   ? 'bg-blue-50 border-blue-200 text-blue-700'
@@ -1467,238 +2161,244 @@ export function CrmPortal({
         </div>
 
         {/* ======================================================================= */}
-        {/* ORDERS DISPLAY: TABLE VIEW OR CARDS VIEW */}
+        {/* ORDERS DISPLAY: FULL-WIDTH TABLE / CARDS VIEW */}
         {/* ======================================================================= */}
-        {filteredOrders.length === 0 ? (
-          /* Empty State */
-          <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs space-y-4 max-w-lg mx-auto mt-6">
-            <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto border border-slate-200 shadow-inner">
-              <ShoppingBag className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="font-heading font-black text-lg text-slate-900">
-                {orders.length === 0 ? 'No Active Orders' : 'No Matching Bookings'}
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                {orders.length === 0
-                  ? 'Portal is ready for client delivery! New customer bookings submitted through the storefront form or WhatsApp will arrive here live in real-time.'
-                  : 'Try clearing your search query or switching the status filter tab above.'}
-              </p>
-            </div>
-            <div className="pt-2 flex justify-center gap-2">
-              <button
-                onClick={() => setNewOrderModalOpen(true)}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Add Manual Order</span>
-              </button>
-              {orders.length > 0 && (
-                <button
-                  onClick={() => {
-                    setActiveNav('all');
-                    setSearch('');
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
-                >
-                  Reset Filter
-                </button>
-              )}
-            </div>
-          </div>
-        ) : viewMode === 'table' ? (
-          /* ===================================================================== */
-          /* TABLE VIEW: FULL-WIDTH DENSE & CLEAR CONTACTS SPREAD */
-          /* ===================================================================== */
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto no-scrollbar">
-              <table className="w-full text-left border-collapse table-auto">
-                <thead>
-                  <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-2.5 px-3 whitespace-nowrap">Customer</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Order ID</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Booked On</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Pickup Slot</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Service</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Total</th>
-                    <th className="py-2.5 px-3 whitespace-nowrap">Status</th>
-                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs font-medium">
-                  {filteredOrders.map((ord) => {
-                    const timeInfo = formatBookingTimestamp(ord.createdAt || ord.timestamp);
-                    const cfg = getStatusConfig(ord.status);
-
-                    return (
-                      <tr
-                        key={ord.id}
-                        onClick={() => handleOpenSidebar(ord)}
-                        className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
-                      >
-                        {/* Customer & Mobile */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                              {ord.name.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="font-heading font-black text-xs text-slate-900 group-hover:text-blue-700 block whitespace-nowrap truncate max-w-[130px] xl:max-w-[180px]">
-                                {ord.name}
-                              </span>
-                              <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span className="font-mono whitespace-nowrap">{ord.phone || 'No phone'}</span>
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Order ID */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="font-mono font-bold text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/90 whitespace-nowrap inline-block">
-                            #{ord.id}
-                          </span>
-                        </td>
-
-                        {/* Kab Book Kiya Tha (Booked On) */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <div className="whitespace-nowrap">
-                            <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1 whitespace-nowrap">
-                              <Calendar className="w-3 h-3 text-blue-600 shrink-0" />
-                              <span className="whitespace-nowrap">{timeInfo.fullDateTime}</span>
-                            </span>
-                            <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded mt-0.5 inline-block whitespace-nowrap">
-                              {timeInfo.timeAgo}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Pickup Schedule Window */}
-                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
-                          <div className="flex items-center gap-1 whitespace-nowrap">
-                            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="font-semibold text-[11px] whitespace-nowrap truncate max-w-[130px] block">
-                              {ord.slot}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Service Package */}
-                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
-                          <span className="truncate max-w-[140px] xl:max-w-[190px] block font-medium text-[11px] whitespace-nowrap" title={ord.service}>
-                            {ord.service}
-                          </span>
-                        </td>
-
-                        {/* Total Amount */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="font-mono font-bold text-slate-900 text-xs whitespace-nowrap">
-                            {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
-                          </span>
-                        </td>
-
-                        {/* Status Chip */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <span
-                            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${cfg.pillBg}`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-                            <span className="whitespace-nowrap">{ord.status}</span>
-                          </span>
-                        </td>
-
-                        {/* Quick Row Actions (Confirm Call, Assign Pickup, Picked Up, Cancel, Details) */}
-                        <td className="py-2.5 px-3 text-right whitespace-nowrap shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                            {/* Step 1: Confirm Call button */}
-                            {ord.status === 'New Request' && (
-                              <button
-                                onClick={() => handleMarkCallDone(ord)}
-                                className="h-7 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                                title="Confirm Call with Customer"
-                              >
-                                <PhoneCall className="w-3 h-3 shrink-0" />
-                                <span className="whitespace-nowrap">Confirm Call</span>
-                              </button>
-                            )}
-
-                            {/* Step 2: Assign Pickup & Picked Up when Call Confirmed */}
-                            {ord.status === 'Call Confirmed' && (
-                              <>
-                                <button
-                                  onClick={() => handleAssignPickup(ord)}
-                                  className="h-7 px-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                                  title="Assign Pickup (Dispatch Rider)"
-                                >
-                                  <Truck className="w-3 h-3 shrink-0" />
-                                  <span className="whitespace-nowrap">Assign Pickup</span>
-                                </button>
-                                <button
-                                  onClick={() => handleMarkPickupDone(ord)}
-                                  className="h-7 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                                  title="Mark Clothes Picked Up"
-                                >
-                                  <Package className="w-3 h-3 shrink-0" />
-                                  <span className="whitespace-nowrap">Picked Up</span>
-                                </button>
-                              </>
-                            )}
-
-                            {/* Step 3: Picked Up when Pickup Assigned */}
-                            {ord.status === 'Pickup Assigned' && (
-                              <button
-                                onClick={() => handleMarkPickupDone(ord)}
-                                className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                                title="Mark Clothes Picked Up"
-                              >
-                                <Package className="w-3 h-3 shrink-0" />
-                                <span className="whitespace-nowrap">Picked Up</span>
-                              </button>
-                            )}
-
-                            {/* Cancel button */}
-                            {ord.status !== 'Cancelled' && ord.status !== 'Delivered' && (
-                              <button
-                                onClick={() => handleCancelOrder(ord)}
-                                className="h-7 px-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-bold text-[10.5px] inline-flex items-center gap-1 border border-slate-200 hover:border-rose-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                                title="Cancel Order"
-                              >
-                                <Ban className="w-3 h-3 text-rose-500 shrink-0" />
-                                <span className="whitespace-nowrap">Cancel</span>
-                              </button>
-                            )}
-
-                            {/* Reactivate button if Cancelled */}
-                            {ord.status === 'Cancelled' && (
-                              <button
-                                onClick={() => handleReactivateOrder(ord)}
-                                className="h-7 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10.5px] inline-flex items-center gap-1 border border-emerald-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                                title="Reactivate Cancelled Order"
-                              >
-                                <RefreshCw className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span className="whitespace-nowrap">Reopen</span>
-                              </button>
-                            )}
-
-                            {/* View Sidebar Drawer */}
-                            <button
-                              onClick={() => handleOpenSidebar(ord)}
-                              className="h-7 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10.5px] inline-flex items-center gap-1 border border-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                              title="Open Order Details Sidebar"
-                            >
-                              <Eye className="w-3 h-3 text-slate-600 shrink-0" />
-                              <span className="whitespace-nowrap">Details</span>
-                            </button>
-                          </div>
-                        </td>
+        <div className="w-full space-y-4">
+            {filteredOrders.length === 0 ? (
+              /* Empty State */
+              <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs space-y-4 max-w-lg mx-auto mt-6">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto border border-slate-200 shadow-inner">
+                  <ShoppingBag className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-lg text-slate-900">
+                    {orders.length === 0 ? 'No Active Orders' : 'No Matching Bookings'}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                    {orders.length === 0
+                      ? 'Portal is ready for client delivery! New customer bookings submitted through the storefront form or WhatsApp will arrive here live in real-time.'
+                      : 'Try clearing your search query or switching the status filter tab above.'}
+                  </p>
+                </div>
+                <div className="pt-2 flex justify-center gap-2">
+                  <button
+                    onClick={() => setNewOrderModalOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Add Manual Order</span>
+                  </button>
+                  {orders.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setActiveNav('all');
+                        setSearch('');
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
+                    >
+                      Reset Filter
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : viewMode === 'table' ? (
+              /* ===================================================================== */
+              /* TABLE VIEW: FULL-WIDTH DENSE & CLEAR CONTACTS SPREAD WITH CRISP LINES */
+              /* ===================================================================== */
+              <div className="bg-white rounded-2xl border border-slate-300 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto no-scrollbar">
+                  <table className="w-full text-left border-collapse table-auto">
+                    <thead>
+                      <tr className="bg-slate-100/95 border-b-2 border-slate-300 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
+                        <th className="py-3 px-3.5 whitespace-nowrap">Customer</th>
+                        <th className="py-3 px-3.5 whitespace-nowrap">Order ID</th>
+                        <th className="py-3 px-3.5 whitespace-nowrap">Booked On</th>
+                        <th className="py-3 px-3.5 whitespace-nowrap">Pickup Slot</th>
+                        <th className="py-3 px-3.5 whitespace-nowrap">Service</th>
+                        <th className="py-3 px-3.5 whitespace-nowrap">Total</th>
+                        <th className="py-3 px-3.5 whitespace-nowrap">Status</th>
+                        <th className="py-3 px-3.5 text-right whitespace-nowrap">Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody className="divide-y-2 divide-slate-200/90 text-xs font-medium">
+                      {filteredOrders.map((ord) => {
+                        const timeInfo = formatBookingTimestamp(ord.createdAt || ord.timestamp);
+                        const cfg = getStatusConfig(ord.status);
+                        const isSelected = selectedOrder?.id === ord.id;
+
+                        return (
+                          <tr
+                            key={ord.id}
+                            onClick={() => handleOpenSidebar(ord)}
+                            className={`border-b-2 border-slate-200 transition-all cursor-pointer group ${
+                              isSelected
+                                ? 'bg-blue-50/95 border-l-4 border-l-blue-600 shadow-2xs font-semibold'
+                                : 'hover:bg-blue-50/50 odd:bg-white even:bg-slate-50/70 border-l-4 border-l-transparent'
+                            }`}
+                          >
+                            {/* Customer & Mobile */}
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                  {ord.name.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="font-heading font-black text-xs text-slate-900 group-hover:text-blue-700 block whitespace-nowrap truncate max-w-[130px] xl:max-w-[180px]">
+                                    {ord.name}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                                    <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span className="font-mono whitespace-nowrap">{ord.phone || 'No phone'}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Order ID */}
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <span className="font-mono font-bold text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/90 whitespace-nowrap inline-block">
+                                #{ord.id}
+                              </span>
+                            </td>
+
+                            {/* Booked On */}
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <div className="whitespace-nowrap">
+                                <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1 whitespace-nowrap">
+                                  <Calendar className="w-3 h-3 text-blue-600 shrink-0" />
+                                  <span className="whitespace-nowrap">{timeInfo.fullDateTime}</span>
+                                </span>
+                                <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded mt-0.5 inline-block whitespace-nowrap">
+                                  {timeInfo.timeAgo}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Pickup Schedule Window */}
+                            <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
+                              <div className="flex items-center gap-1 whitespace-nowrap">
+                                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="font-semibold text-[11px] whitespace-nowrap truncate max-w-[130px] block">
+                                  {ord.slot}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Service Package */}
+                            <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
+                              <span className="truncate max-w-[140px] xl:max-w-[190px] block font-medium text-[11px] whitespace-nowrap" title={ord.service}>
+                                {ord.service}
+                              </span>
+                            </td>
+
+                            {/* Total Amount */}
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <span className="font-mono font-bold text-slate-900 text-xs whitespace-nowrap">
+                                {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
+                              </span>
+                            </td>
+
+                            {/* Status Chip */}
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <span
+                                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${cfg.pillBg}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                                <span className="whitespace-nowrap">{ord.status}</span>
+                              </span>
+                            </td>
+
+                            {/* Quick Row Actions */}
+                            <td className="py-3 px-3.5 text-right whitespace-nowrap shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                {/* Step 1: Confirm Call button */}
+                                {ord.status === 'New Request' && (
+                                  <button
+                                    onClick={() => handleMarkCallDone(ord)}
+                                    className="h-7 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                    title="Confirm Call with Customer"
+                                  >
+                                    <PhoneCall className="w-3 h-3 shrink-0" />
+                                    <span className="whitespace-nowrap">Confirm Call</span>
+                                  </button>
+                                )}
+
+                                {/* Step 2: Assign Pickup & Picked Up when Call Confirmed */}
+                                {ord.status === 'Call Confirmed' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleAssignPickup(ord)}
+                                      className="h-7 px-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                      title="Assign Pickup (Dispatch Rider)"
+                                    >
+                                      <Truck className="w-3 h-3 shrink-0" />
+                                      <span className="whitespace-nowrap">Assign Pickup</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleMarkPickupDone(ord)}
+                                      className="h-7 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                      title="Mark Clothes Picked Up"
+                                    >
+                                      <Package className="w-3 h-3 shrink-0" />
+                                      <span className="whitespace-nowrap">Picked Up</span>
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Step 3: Picked Up when Pickup Assigned */}
+                                {ord.status === 'Pickup Assigned' && (
+                                  <button
+                                    onClick={() => handleMarkPickupDone(ord)}
+                                    className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                    title="Mark Clothes Picked Up"
+                                  >
+                                    <Package className="w-3 h-3 shrink-0" />
+                                    <span className="whitespace-nowrap">Picked Up</span>
+                                  </button>
+                                )}
+
+                                {/* Cancel button */}
+                                {ord.status !== 'Cancelled' && ord.status !== 'Delivered' && (
+                                  <button
+                                    onClick={() => handleCancelOrder(ord)}
+                                    className="h-7 px-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-bold text-[10.5px] inline-flex items-center gap-1 border border-slate-200 hover:border-rose-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                    title="Cancel Order"
+                                  >
+                                    <Ban className="w-3 h-3 text-rose-500 shrink-0" />
+                                    <span className="whitespace-nowrap">Cancel</span>
+                                  </button>
+                                )}
+
+                                {/* Reactivate button if Cancelled */}
+                                {ord.status === 'Cancelled' && (
+                                  <button
+                                    onClick={() => handleReactivateOrder(ord)}
+                                    className="h-7 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10.5px] inline-flex items-center gap-1 border border-emerald-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                    title="Reactivate Cancelled Order"
+                                  >
+                                    <RefreshCw className="w-3 h-3 text-emerald-600 shrink-0" />
+                                    <span className="whitespace-nowrap">Reopen</span>
+                                  </button>
+                                )}
+
+                                {/* View Sidebar Details */}
+                                <button
+                                  onClick={() => handleOpenSidebar(ord)}
+                                  className="h-7 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10.5px] inline-flex items-center gap-1 border border-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                  title="Open Order Details Sidebar"
+                                >
+                                  <Eye className="w-3 h-3 text-slate-600 shrink-0" />
+                                  <span className="whitespace-nowrap">Details</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
         ) : (
           /* ===================================================================== */
           /* CARDS VIEW: MULTI-COLUMN INTERACTIVE CARDS GRID */
@@ -1847,11 +2547,12 @@ export function CrmPortal({
             })}
           </div>
         )}
+        </div>
 
       </main>
 
       {/* ========================================================================= */}
-      {/* 4. SLIDE-OVER SIDEBAR DRAWER (OPENS WHEN ANY CONTACT / ORDER IS CLICKED) */}
+      {/* 4. SLIDE-OVER SIDEBAR DRAWER (PREVIOUS BEHAVIOR) */}
       {/* ========================================================================= */}
       {isSidebarOpen && selectedOrder && (
         <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200">
@@ -1863,534 +2564,7 @@ export function CrmPortal({
 
           {/* Sidebar Drawer Panel */}
           <div className="relative w-full sm:w-[520px] lg:w-[560px] bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col z-10 overflow-hidden animate-in slide-in-from-right duration-300">
-            
-            {/* Drawer Header */}
-            <div className="p-4 px-5 border-b border-slate-200/90 bg-slate-900 text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
-                  {selectedOrder.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-slate-200 bg-white/10 px-2 py-0.5 rounded border border-white/20">
-                      #{selectedOrder.id}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                        getStatusConfig(selectedOrder.status).pillBg
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${getStatusConfig(selectedOrder.status).dot}`} />
-                      {selectedOrder.status}
-                    </span>
-                  </div>
-                  <h2 className="font-heading font-black text-lg text-white mt-0.5 leading-tight">
-                    {selectedOrder.name}
-                  </h2>
-                </div>
-              </div>
-
-              <button
-                onClick={handleCloseSidebar}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-                title="Close Sidebar"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Drawer Body (Scrollable) */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              
-              {/* ================================================================= */}
-              {/* PROMINENT CARD: "KAB BOOK KIYA THA" (When Customer Placed Booking) */}
-              {/* ================================================================= */}
-              <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-blue-50/90 p-4 rounded-2xl border border-blue-200/90 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-extrabold text-[11px] uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                    Customer Booking Timing
-                  </span>
-                  <span className="font-mono font-bold text-xs text-blue-800 bg-white/80 px-2 py-0.5 rounded border border-blue-200">
-                    {formatBookingTimestamp(selectedOrder.createdAt || selectedOrder.timestamp).timeAgo}
-                  </span>
-                </div>
-
-                <div className="bg-white p-3 rounded-xl border border-blue-100 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-semibold text-slate-500 uppercase block">
-                      Samne Wale Ne Kab Book Kiya:
-                    </span>
-                    <span className="font-heading font-black text-sm text-slate-900">
-                      {formatBookingTimestamp(selectedOrder.createdAt || selectedOrder.timestamp).fullDateTime}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-semibold text-slate-500 uppercase block">
-                      Requested Slot:
-                    </span>
-                    <span className="text-xs font-bold text-blue-700">
-                      {selectedOrder.slot}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ================================================================= */}
-              {/* OPERATIONAL LIFECYCLE ACTION HUB (CONFIRM CALL -> ASSIGN PICKUP -> MARK PICKED UP) */}
-              {/* ================================================================= */}
-              <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50 rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
-                {/* Stage Header Banner */}
-                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>Next Action (Operational Stage)</span>
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 shrink-0 ${
-                      getStatusConfig(selectedOrder.status).pillBg
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${getStatusConfig(selectedOrder.status).dot}`} />
-                    <span className="whitespace-nowrap">{selectedOrder.status}</span>
-                  </span>
-                </div>
-
-                {/* Status Guidance Banner */}
-                {selectedOrder.status === 'New Request' && (
-                  <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-amber-200/80 flex items-center justify-center shrink-0 text-amber-800 font-black text-xs">
-                      1
-                    </div>
-                    <div>
-                      <p className="font-bold text-amber-950">Step 1: Customer Call Verification Pending</p>
-                      <p className="text-[11px] text-amber-800">Call customer to verify order and confirm pickup schedule.</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedOrder.status === 'Call Confirmed' && (
-                  <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200 text-blue-900 text-xs flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-blue-200/80 flex items-center justify-center shrink-0 text-blue-800 font-black text-xs">
-                      2
-                    </div>
-                    <div>
-                      <p className="font-bold text-blue-950">Step 2: Call Confirmed ✓ — Schedule Pickup</p>
-                      <p className="text-[11px] text-blue-800">Call is confirmed. Assign a rider or record collection directly.</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedOrder.status === 'Pickup Assigned' && (
-                  <div className="p-2.5 rounded-xl bg-indigo-50/90 border border-indigo-200 text-indigo-900 text-xs flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-indigo-200/80 flex items-center justify-center shrink-0 text-indigo-800 font-black text-xs">
-                      3
-                    </div>
-                    <div>
-                      <p className="font-bold text-indigo-950">Step 3: Rider Dispatched — Doorstep Collection</p>
-                      <p className="text-[11px] text-indigo-800">Rider dispatched to customer address. Click 'Picked Up' once clothes are received.</p>
-                    </div>
-                  </div>
-                )}
-
-                {['Picked Up', 'At Store / Inspection'].includes(selectedOrder.status) && (
-                  <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-emerald-200/80 flex items-center justify-center shrink-0 text-emerald-800 font-black text-xs">
-                      ✓
-                    </div>
-                    <div>
-                      <p className="font-bold text-emerald-950">Clothes Received at Store / Workshop!</p>
-                      <p className="text-[11px] text-emerald-800">Begin inspection and cleaning workflow.</p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedOrder.status === 'Cancelled' && (
-                  <div className="p-2.5 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-rose-200/80 flex items-center justify-center shrink-0 text-rose-800 font-black text-xs">
-                      ✕
-                    </div>
-                    <div>
-                      <p className="font-bold text-rose-950">Order Cancelled</p>
-                      <p className="text-[11px] text-rose-800">This order has been cancelled. Click below to reactivate if needed.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 3 Step Action Grid (Sequential, Color-Coded, Single-Line) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
-                  {/* Step 1: Confirm Call */}
-                  <button
-                    onClick={() => handleMarkCallDone(selectedOrder)}
-                    className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
-                      selectedOrder.callDone || ['Call Confirmed', 'Pickup Assigned', 'Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
-                        : selectedOrder.status === 'New Request'
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs ring-2 ring-blue-400/50'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                    }`}
-                    title="1. Confirm call with customer"
-                  >
-                    {selectedOrder.callDone || selectedOrder.status !== 'New Request' ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    ) : (
-                      <PhoneCall className="w-3.5 h-3.5 text-white shrink-0" />
-                    )}
-                    <span className="whitespace-nowrap">
-                      {selectedOrder.callDone || selectedOrder.status !== 'New Request'
-                        ? 'Call Confirmed ✓'
-                        : '1. Confirm Call'}
-                    </span>
-                  </button>
-
-                  {/* Step 2: Assign Pickup */}
-                  <button
-                    onClick={() => handleAssignPickup(selectedOrder)}
-                    className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
-                      selectedOrder.status === 'Pickup Assigned'
-                        ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400/50'
-                        : ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
-                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
-                        : selectedOrder.status === 'Call Confirmed'
-                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs ring-2 ring-amber-300'
-                        : 'bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-800 border border-slate-200'
-                    }`}
-                    title="2. Assign rider to collect clothes"
-                  >
-                    <Truck className="w-3.5 h-3.5 shrink-0" />
-                    <span className="whitespace-nowrap">
-                      {selectedOrder.status === 'Pickup Assigned'
-                        ? 'Rider Assigned ✓'
-                        : ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
-                        ? 'Pickup Done ✓'
-                        : '2. Assign Pickup'}
-                    </span>
-                  </button>
-
-                  {/* Step 3: Picked Up */}
-                  <button
-                    onClick={() => handleMarkPickupDone(selectedOrder)}
-                    className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
-                      ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
-                        : selectedOrder.status === 'Pickup Assigned' || selectedOrder.status === 'Call Confirmed'
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs ring-2 ring-emerald-400/50'
-                        : 'bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200'
-                    }`}
-                    title="3. Mark clothes collected from customer"
-                  >
-                    <Package className="w-3.5 h-3.5 shrink-0" />
-                    <span className="whitespace-nowrap">
-                      {['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
-                        ? 'Picked Up ✓'
-                        : '3. Mark Picked Up'}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Additional next step for workshop if clothes already picked up */}
-                {['Picked Up', 'At Store / Inspection'].includes(selectedOrder.status) && (
-                  <div className="pt-1 flex items-center gap-2">
-                    <button
-                      onClick={() => handleStartCleaning(selectedOrder)}
-                      className="flex-1 h-9 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                      <span className="whitespace-nowrap">Start Washing / Cleaning</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Secondary Row: Safe Cancellation / Reactivate Options */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  {selectedOrder.status === 'Cancelled' ? (
-                    <button
-                      onClick={() => handleReactivateOrder(selectedOrder)}
-                      className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3 shrink-0" />
-                      <span className="whitespace-nowrap">Reactivate Order</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleCancelOrder(selectedOrder)}
-                      className="h-8 px-2.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 font-semibold text-[11px] inline-flex items-center gap-1.5 border border-slate-200 hover:border-rose-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                      title="Cancel this order if customer declined"
-                    >
-                      <Ban className="w-3 h-3 text-rose-500 shrink-0" />
-                      <span className="whitespace-nowrap">Cancel Order</span>
-                    </button>
-                  )}
-
-                  <span className="text-[10px] text-slate-400 font-medium ml-auto hidden sm:inline">
-                    Status: {selectedOrder.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Direct Communications Strip (Call, WhatsApp, Print Slip) */}
-              <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
-                <a
-                  href={`tel:${selectedOrder.phone}`}
-                  className="flex-1 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs inline-flex items-center justify-center gap-1.5 border border-slate-200 transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Phone className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span className="whitespace-nowrap truncate">Call {selectedOrder.phone}</span>
-                </a>
-
-                <button
-                  onClick={() => openWhatsAppDrawer(selectedOrder, 1)}
-                  className="flex-1 h-9 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-                  <span className="whitespace-nowrap">WhatsApp Chat</span>
-                </button>
-
-                <button
-                  onClick={() => handlePrintRiderSlip(selectedOrder)}
-                  className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs inline-flex items-center justify-center gap-1 border border-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                  title="Print Thermal / Rider Pickup Slip"
-                >
-                  <Printer className="w-3.5 h-3.5 shrink-0" />
-                  <span className="whitespace-nowrap">Print Slip</span>
-                </button>
-              </div>
-
-              {/* Order Lifecycle Visual Progress Stepper */}
-              <div className="bg-slate-50/90 p-4 rounded-2xl border border-slate-200/90 space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                  <span className="text-[11px] uppercase tracking-wider text-slate-500">
-                    Order Lifecycle Pipeline
-                  </span>
-                  {selectedOrder.status === 'Cancelled' ? (
-                    <span className="text-rose-600 font-bold text-[11px]">
-                      STATUS: CANCELLED
-                    </span>
-                  ) : (
-                    <span className="text-blue-700 font-mono text-[11px]">
-                      Step {currentLifecycleIndex + 1} of 7
-                    </span>
-                  )}
-                </div>
-
-                {/* Stepper Dots */}
-                <div className="grid grid-cols-7 gap-1 pt-1">
-                  {ORDER_LIFECYCLE_STEPS.map((step, idx) => {
-                    const isDone = idx < currentLifecycleIndex;
-                    const isCurrent = idx === currentLifecycleIndex;
-
-                    return (
-                      <button
-                        key={step.key}
-                        onClick={() => handleStatusChange(selectedOrder.id, step.key)}
-                        className={`group flex flex-col items-center text-center p-1 rounded-lg transition-all ${
-                          isCurrent ? 'bg-blue-600/10' : 'hover:bg-slate-200/50'
-                        }`}
-                        title={`Click to set status to ${step.label}`}
-                      >
-                        <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono transition-all ${
-                            isDone
-                              ? 'bg-emerald-600 text-white'
-                              : isCurrent
-                              ? 'bg-blue-600 text-white ring-2 ring-blue-400/40 shadow-xs'
-                              : 'bg-slate-200 text-slate-600'
-                          }`}
-                        >
-                          {isDone ? <Check className="w-3 h-3" /> : idx + 1}
-                        </div>
-                        <span
-                          className={`text-[9.5px] mt-1 font-semibold truncate max-w-full ${
-                            isCurrent
-                              ? 'text-blue-700 font-black'
-                              : isDone
-                              ? 'text-emerald-700'
-                              : 'text-slate-500'
-                          }`}
-                        >
-                          {step.short}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {selectedOrder.status === 'Cancelled' && (
-                  <div className="mt-2 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-                    <Ban className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>This booking is marked as <b>Cancelled</b>. Click any step above to reactivate.</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Customer Pickup Address & Maps */}
-              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    Pickup Address
-                  </span>
-                  <button
-                    onClick={() => copyToClipboard(selectedOrder.address, 'Address')}
-                    className="text-[10.5px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-0.5"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>Copy</span>
-                  </button>
-                </div>
-                <p className="font-semibold text-slate-900 leading-relaxed">
-                  {selectedOrder.address || 'Address not provided'}
-                </p>
-                <div className="pt-1 flex items-center justify-between">
-                  <a
-                    href={`https://maps.google.com/?q=${encodeURIComponent(
-                      `${selectedOrder.address}, Nerul West, Navi Mumbai`
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-bold"
-                  >
-                    <Navigation className="w-3 h-3" />
-                    <span>Open in Google Maps &rarr;</span>
-                  </a>
-                  <button
-                    onClick={() => handleCopyRiderDispatch(selectedOrder)}
-                    className="text-[11px] text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>Copy Rider Slip</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Garments & Services Package */}
-              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                    <Package className="w-3.5 h-3.5 text-slate-400" />
-                    Garment &amp; Service Package
-                  </span>
-                  <span className="font-mono font-bold text-slate-900">
-                    Estimate: {selectedOrder.total.startsWith('₹') ? selectedOrder.total : `₹${selectedOrder.total}`}
-                  </span>
-                </div>
-                <p className="font-bold text-slate-900 text-sm">
-                  {selectedOrder.service} {selectedOrder.items ? `— ${selectedOrder.items}` : ''}
-                </p>
-                {selectedOrder.notes && (
-                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 italic">
-                    &quot;{selectedOrder.notes}&quot;
-                  </div>
-                )}
-              </div>
-
-              {/* WhatsApp Notification Action Cards (3 Clean Intent Templates) */}
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">
-                  Send WhatsApp Customer Updates:
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {/* Template 1: Pickup Confirmed */}
-                  <button
-                    onClick={() => openWhatsAppDrawer(selectedOrder, 1)}
-                    className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200 hover:border-blue-300 text-left transition-all active:scale-98 group"
-                  >
-                    <span className="text-[9.5px] font-bold uppercase tracking-wide text-blue-700 block">
-                      Template 1
-                    </span>
-                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-blue-900 mt-0.5">
-                      Pickup Confirmed
-                    </h5>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Send receipt
-                    </p>
-                  </button>
-
-                  {/* Template 2: Send Quotation */}
-                  <button
-                    onClick={() => openWhatsAppDrawer(selectedOrder, 2)}
-                    className="p-3 rounded-2xl bg-slate-50 hover:bg-purple-50/60 border border-slate-200 hover:border-purple-300 text-left transition-all active:scale-98 group"
-                  >
-                    <span className="text-[9.5px] font-bold uppercase tracking-wide text-purple-700 block">
-                      Template 2
-                    </span>
-                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-purple-900 mt-0.5">
-                      Send Quotation
-                    </h5>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Garment price
-                    </p>
-                  </button>
-
-                  {/* Template 3: Ready for Delivery */}
-                  <button
-                    onClick={() => openWhatsAppDrawer(selectedOrder, 3)}
-                    className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 text-left transition-all active:scale-98 group"
-                  >
-                    <span className="text-[9.5px] font-bold uppercase tracking-wide text-emerald-700 block">
-                      Template 3
-                    </span>
-                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-emerald-900 mt-0.5">
-                      Ready for Delivery
-                    </h5>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Delivery notice
-                    </p>
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Transition Selector */}
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">
-                  Change Status Directly:
-                </span>
-
-                <div className="space-y-2">
-                  {STATUS_GROUPS.map((grp) => (
-                    <div key={grp.group} className="space-y-1">
-                      <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
-                        <span>{grp.group}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {grp.statuses.map((st) => {
-                          const isCurrent = selectedOrder.status === st;
-                          const cfg = getStatusConfig(st);
-
-                          return (
-                            <button
-                              key={st}
-                              onClick={() => handleStatusChange(selectedOrder.id, st)}
-                              className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
-                                isCurrent
-                                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                              }`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${isCurrent ? 'bg-white' : cfg.dot}`} />
-                              <span>{st}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Delete Order option */}
-              <div className="pt-3 border-t border-slate-200 flex justify-end">
-                <button
-                  onClick={() => handleDeleteOrder(selectedOrder.id)}
-                  className="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete This Order Permanently</span>
-                </button>
-              </div>
-
-            </div>
+            {renderOrderDetailContent(selectedOrder)}
           </div>
         </div>
       )}
@@ -2484,7 +2658,13 @@ export function CrmPortal({
                   <p className="whitespace-pre-line leading-relaxed font-sans">{msg.text}</p>
                   <div className="text-[10px] text-slate-500 text-right flex items-center justify-end gap-1">
                     <span>{msg.time}</span>
-                    <span className="text-[#53bdeb] font-bold">✓✓</span>
+                    {msg.status === 'delivered' ? (
+                      <span className="text-[#53bdeb] font-bold" title="Delivered">✓✓</span>
+                    ) : msg.status === 'failed' ? (
+                      <span className="text-rose-500 font-bold" title="Delivery failed">⚠️</span>
+                    ) : (
+                      <span className="text-slate-400 font-bold" title="Sending...">✓</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2693,11 +2873,20 @@ export function CrmPortal({
                     onChange={(e) => setNewCustSlot(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none cursor-pointer"
                   >
-                    <option value="Today · 10:00 AM – 12:00 PM">Today · 10:00 AM – 12:00 PM</option>
-                    <option value="Today · 02:00 PM – 04:00 PM">Today · 02:00 PM – 04:00 PM</option>
-                    <option value="Today · 06:00 PM – 08:00 PM">Today · 06:00 PM – 08:00 PM</option>
-                    <option value="Tomorrow · Morning">Tomorrow · Morning</option>
-                    <option value="Tomorrow · Evening">Tomorrow · Evening</option>
+                    {getActiveSlotsList(getLocalTodayDateString()).map((s) => (
+                      <option key={`Today · ${s.value}`} value={`Today · ${s.value}`}>
+                        Today · {s.label}
+                      </option>
+                    ))}
+                    <option value="Tomorrow · Morning (09:00 AM – 12:00 PM)">
+                      Tomorrow · Morning (09:00 AM – 12:00 PM)
+                    </option>
+                    <option value="Tomorrow · Afternoon (01:00 PM – 04:00 PM)">
+                      Tomorrow · Afternoon (01:00 PM – 04:00 PM)
+                    </option>
+                    <option value="Tomorrow · Evening (05:00 PM – 08:00 PM)">
+                      Tomorrow · Evening (05:00 PM – 08:00 PM)
+                    </option>
                   </select>
                 </div>
 

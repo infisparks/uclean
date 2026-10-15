@@ -9,6 +9,11 @@ import {
   validateCustomerName,
   validateAddress,
 } from '@/lib/validation';
+import {
+  getMinSelectableDateString,
+  getActiveSlotsList,
+  getDefaultSlotForDate,
+} from '@/lib/slotAvailability';
 
 interface DetailedOrderFormModalProps {
   isOpen: boolean;
@@ -30,8 +35,9 @@ export function DetailedOrderFormModal({
   const [building, setBuilding] = useState('');
   const [address, setAddress] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('Flexible');
+  const initialMinDate = getMinSelectableDateString();
+  const [date, setDate] = useState(initialMinDate);
+  const [time, setTime] = useState(getDefaultSlotForDate(initialMinDate));
   const [contact, setContact] = useState('WhatsApp');
   const [items, setItems] = useState('');
   const [notes, setNotes] = useState('');
@@ -46,7 +52,10 @@ export function DetailedOrderFormModal({
 
   React.useEffect(() => {
     if (isOpen) {
+      const minD = getMinSelectableDateString();
       setBookingId(null);
+      setDate(minD);
+      setTime(getDefaultSlotForDate(minD));
       if (preselectedService) {
         setSelectedServices([preselectedService]);
       } else {
@@ -57,6 +66,14 @@ export function DetailedOrderFormModal({
       }
     }
   }, [isOpen, preselectedService, garmentName]);
+
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate);
+    const validSlots = getActiveSlotsList(newDate);
+    if (!validSlots.some((s) => s.value === time)) {
+      setTime(validSlots[0]?.value || '');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -417,8 +434,9 @@ export function DetailedOrderFormModal({
                     <label className="block text-[11px] font-bold text-[#0c2b1e] mb-1">Pickup Date</label>
                     <input
                       type="date"
+                      min={getMinSelectableDateString()}
                       value={date}
-                      onChange={(e) => setDate(e.target.value)}
+                      onChange={(e) => handleDateChange(e.target.value)}
                       className="w-full h-10 px-2 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
                     />
                   </div>
@@ -430,10 +448,11 @@ export function DetailedOrderFormModal({
                       onChange={(e) => setTime(e.target.value)}
                       className="w-full h-10 px-2 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
                     >
-                      <option>Morning (8-12)</option>
-                      <option>Afternoon (12-4)</option>
-                      <option>Evening (4-9)</option>
-                      <option>Flexible</option>
+                      {getActiveSlotsList(date).map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.shortLabel}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

@@ -9,6 +9,11 @@ import {
   validateCustomerName,
   validateAddress,
 } from '@/lib/validation';
+import {
+  getMinSelectableDateString,
+  getActiveSlotsList,
+  getDefaultSlotForDate,
+} from '@/lib/slotAvailability';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -34,8 +39,9 @@ export function BookingModal({
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [preferredDate, setPreferredDate] = useState('');
-  const [preferredTimeSlot, setPreferredTimeSlot] = useState('Morning (8:00 AM - 12:00 PM)');
+  const initialMinDate = getMinSelectableDateString();
+  const [preferredDate, setPreferredDate] = useState(initialMinDate);
+  const [preferredTimeSlot, setPreferredTimeSlot] = useState(getDefaultSlotForDate(initialMinDate));
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
@@ -48,14 +54,25 @@ export function BookingModal({
   // Update defaults when modal opens with new props
   React.useEffect(() => {
     if (isOpen) {
+      const minD = getMinSelectableDateString();
       setServiceType(defaultService);
       setTier(defaultTier);
       setSubmittedId(null);
       setNameError('');
       setPhoneError('');
       setAddressError('');
+      setPreferredDate(minD);
+      setPreferredTimeSlot(getDefaultSlotForDate(minD));
     }
   }, [isOpen, defaultService, defaultTier]);
+
+  const handleDateChange = (newDate: string) => {
+    setPreferredDate(newDate);
+    const validSlots = getActiveSlotsList(newDate);
+    if (!validSlots.some((s) => s.value === preferredTimeSlot)) {
+      setPreferredTimeSlot(validSlots[0]?.value || '');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -372,8 +389,9 @@ export function BookingModal({
                     <Calendar className="absolute left-3 top-3 w-4 h-4 text-[#632608]" />
                     <input
                       type="date"
+                      min={getMinSelectableDateString()}
                       value={preferredDate}
-                      onChange={(e) => setPreferredDate(e.target.value)}
+                      onChange={(e) => handleDateChange(e.target.value)}
                       className="w-full h-11 pl-9 pr-3 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
                     />
                   </div>
@@ -390,9 +408,11 @@ export function BookingModal({
                       onChange={(e) => setPreferredTimeSlot(e.target.value)}
                       className="w-full h-11 pl-9 pr-3 rounded-xl border border-[#DECBB0] bg-[#FAF6EE] text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#008f51]"
                     >
-                      <option>Morning (8:00 AM - 12:00 PM)</option>
-                      <option>Afternoon (12:00 PM - 4:00 PM)</option>
-                      <option>Evening (4:00 PM - 9:00 PM)</option>
+                      {getActiveSlotsList(preferredDate).map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

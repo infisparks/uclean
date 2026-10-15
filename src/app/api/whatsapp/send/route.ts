@@ -36,7 +36,10 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         number: cleanedNumber,
         text,
+        delay: 0,
+        linkPreview: false,
       }),
+      signal: AbortSignal.timeout(8000),
     });
 
     const data = await response.json().catch(() => null);
