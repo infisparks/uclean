@@ -7,6 +7,7 @@ import {
   CATALOG_CATEGORIES,
   CatalogService,
   searchCatalog,
+  isServiceMatch,
 } from '@/lib/servicesCatalog';
 
 interface AllServicesModalProps {
@@ -173,7 +174,9 @@ export function AllServicesModal({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {filteredServices.map((srv) => {
-                const isChecked = selectedServices.includes(srv.id);
+                const isChecked = selectedServices.some(
+                  (s) => isServiceMatch(s, srv.id) || isServiceMatch(s, srv.name)
+                );
                 return (
                   <label
                     key={srv.id}

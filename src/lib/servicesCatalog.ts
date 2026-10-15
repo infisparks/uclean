@@ -10,11 +10,60 @@ export interface CatalogService {
   isPrimary?: boolean;
 }
 
-// 1. The 6 Primary Default Services shown on initial load
+// Helper: Check if service ID or Name matches target string flexibly
+export function isServiceMatch(serviceIdOrName: string, target: string): boolean {
+  if (!serviceIdOrName || !target) return false;
+  const a = serviceIdOrName.toLowerCase().trim();
+  const b = target.toLowerCase().trim();
+  if (a === b) return true;
+  if (a.includes(b) || b.includes(a)) return true;
+  const cleanA = a.replace(/[^a-z0-9]/g, '');
+  const cleanB = b.replace(/[^a-z0-9]/g, '');
+  if (cleanA && cleanB && (cleanA.includes(cleanB) || cleanB.includes(cleanA))) return true;
+  return false;
+}
+
+// 1. The Primary Commercial Store Categories (Matching Homepage Grid 1:1)
 export const PRIMARY_SERVICES: CatalogService[] = [
   {
-    id: 'Wash & Fold — ₹109/kg',
-    name: 'Wash & Fold',
+    id: "Men's Suits & Ethnic",
+    name: "Men's Suits & Ethnic",
+    icon: '👔',
+    rate: 'From ₹119/item',
+    category: "Men's Wear",
+    keywords: "men suits blazer ethnic sherwani tuxedo kurta dhoti coat indowestern wedding dry cleaning",
+    isPrimary: true,
+  },
+  {
+    id: "Women's Ethnic & Saree Spa",
+    name: "Women's Ethnic & Saree",
+    icon: '🥻',
+    rate: 'From ₹69/item',
+    category: "Women's Ethnic",
+    keywords: "women ethnic saree spa lehenga choli silk banarasi dupatta bridal festive dry cleaning",
+    isPrimary: true,
+  },
+  {
+    id: 'Winterwear & Leather Care',
+    name: 'Winterwear & Leather Care',
+    icon: '🧥',
+    rate: 'From ₹99/item',
+    category: 'Winter & Leather',
+    keywords: 'winterwear leather jacket coat sweater cardigan puffer fur overcoat dry cleaning',
+    isPrimary: true,
+  },
+  {
+    id: 'Shirts, Pants & Steam Press',
+    name: 'Shirts, Pants & Press',
+    icon: '👕',
+    rate: 'From ₹25/item',
+    category: 'Laundry & Press',
+    keywords: 'shirts pants steam press trousers jeans daily wear office charak creasing iron',
+    isPrimary: true,
+  },
+  {
+    id: 'Wash & Fold Laundry',
+    name: 'Wash & Fold Laundry',
     icon: '🧺',
     rate: '₹109/kg',
     category: 'Laundry & Press',
@@ -22,8 +71,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     isPrimary: true,
   },
   {
-    id: 'Wash & Iron — ₹149/kg',
-    name: 'Wash & Iron',
+    id: 'Wash & Steam Iron',
+    name: 'Wash & Steam Iron',
     icon: '👔',
     rate: '₹149/kg',
     category: 'Laundry & Press',
@@ -31,12 +80,12 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     isPrimary: true,
   },
   {
-    id: 'Dry Cleaning — from ₹149',
-    name: 'Dry Cleaning & Suits',
-    icon: '🧥',
-    rate: 'From ₹149',
-    category: "Men's Wear",
-    keywords: 'dry clean suit blazer coat sherwani kurta saree lehenga jacket safari formal',
+    id: 'Footwear & Designer Shoe Spa',
+    name: 'Footwear & Shoe Spa',
+    icon: '👟',
+    rate: 'From ₹349/pair',
+    category: 'Footwear',
+    keywords: 'shoe sneakers boots leather footwear spa sports white shoes restoration',
     isPrimary: true,
   },
   {
@@ -58,12 +107,12 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     isPrimary: true,
   },
   {
-    id: 'Shoe Spa & Cleaning',
-    name: 'Shoe Spa & Leather',
-    icon: '👟',
-    rate: 'Buy 2 Get 1',
-    category: 'Footwear',
-    keywords: 'shoe sneakers boots leather footwear spa sports white shoes running',
+    id: 'Shawls, Pashmina & Ties',
+    name: 'Shawls & Accessories',
+    icon: '🧣',
+    rate: 'From ₹25/item',
+    category: 'Accessories',
+    keywords: 'shawl pashmina toosh lohi muffler woolen cashmere scarf tie',
     isPrimary: true,
   },
 ];

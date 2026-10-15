@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Phone,
   MessageSquare,
@@ -34,6 +34,15 @@ import {
   Layers,
   ShoppingBag,
   LogOut,
+  Ban,
+  Trash2,
+  Download,
+  Volume2,
+  VolumeX,
+  Printer,
+  Eye,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import {
   sendWhatsAppMessage,
@@ -77,6 +86,7 @@ export interface CrmOrder {
   notes: string;
   items?: string;
   createdAt?: string;
+  timestamp?: string;
   callDone?: boolean;
   pickupDone?: boolean;
 }
@@ -88,99 +98,6 @@ interface ChatMessage {
   time: string;
   status: 'sent' | 'delivered';
 }
-
-const INITIAL_DEMO_ORDERS: CrmOrder[] = [
-  {
-    id: 'UC-26095',
-    name: 'Ayesha Shaikh',
-    phone: '9820145621',
-    service: 'Wash & Steam Iron',
-    qty: '4 kg (estimate)',
-    total: '596',
-    address: 'Flat 402, Seawoods Palm Beach Road, Sector 6, Nerul West',
-    slot: 'Today · 02:00 PM – 04:00 PM',
-    date: 'Today',
-    time: '02:00 PM – 04:00 PM',
-    status: 'New Request',
-    notes: 'Please call 10 mins before arrival. 4 shirts & 2 bedsheets.',
-    items: '4 Shirts, 2 Double Bedsheets',
-    createdAt: '10 mins ago',
-    callDone: false,
-    pickupDone: false,
-  },
-  {
-    id: 'UC-26094',
-    name: 'Rahul Mehta',
-    phone: '9833441122',
-    service: 'Dry Cleaning — Men Suits',
-    qty: '2 garments',
-    total: '499',
-    address: 'B-12, Greens Enclave, Sector 8, Nerul West',
-    slot: 'Today · 05:00 PM – 07:00 PM',
-    date: 'Today',
-    time: '05:00 PM – 07:00 PM',
-    status: 'Call Confirmed',
-    notes: '2-piece wedding tuxedo suit. Gentle steam press required.',
-    items: '1 Blazer, 1 Trouser',
-    createdAt: '1 hour ago',
-    callDone: true,
-    pickupDone: false,
-  },
-  {
-    id: 'UC-26093',
-    name: 'Sana Khan',
-    phone: '8879654123',
-    service: 'Women Ethnic & Saree Spa',
-    qty: '3 Sarees',
-    total: '850',
-    address: 'Bldg 3, Sector 10, Nerul West',
-    slot: 'Today · 11:00 AM – 01:00 PM',
-    date: 'Today',
-    time: '11:00 AM – 01:00 PM',
-    status: 'Pickup Assigned',
-    notes: 'Banarasi silk saree with zari border. Roll press required.',
-    items: '3 Silk Sarees',
-    createdAt: '2 hours ago',
-    callDone: true,
-    pickupDone: false,
-  },
-  {
-    id: 'UC-26092',
-    name: 'Vivek Patil',
-    phone: '9769223344',
-    service: 'Footwear & Sneaker Spa',
-    qty: '2 pairs',
-    total: '698',
-    address: 'Plot 45, Sector 4, Nerul West',
-    slot: 'Today · 03:00 PM – 05:00 PM',
-    date: 'Today',
-    time: '03:00 PM – 05:00 PM',
-    status: 'Ready for Delivery',
-    notes: 'Nike Air Jordans and formal leather shoes deep cleaned & sanitized.',
-    items: '1 Sneaker, 1 Leather Shoes',
-    createdAt: 'Yesterday',
-    callDone: true,
-    pickupDone: true,
-  },
-  {
-    id: 'UC-26091',
-    name: 'Fatima Ali',
-    phone: '9167889900',
-    service: 'Wash & Fold Laundry',
-    qty: '5 kg',
-    total: '545',
-    address: 'Room 201, Shanti Heights, Sector 6, Nerul West',
-    slot: 'Delivered',
-    date: 'Yesterday',
-    time: 'Delivered',
-    status: 'Delivered',
-    notes: 'Organic softener requested.',
-    items: 'Everyday wear clothes',
-    createdAt: '2 days ago',
-    callDone: true,
-    pickupDone: true,
-  },
-];
 
 const ORDER_LIFECYCLE_STEPS = [
   { key: 'New Request', label: '1. Request', short: 'Request' },
@@ -195,7 +112,7 @@ const ORDER_LIFECYCLE_STEPS = [
 const STATUS_GROUPS = [
   {
     group: 'Intake & Verification',
-    description: 'Booking arrival & rider dispatch',
+    description: 'Booking arrival & customer call verification',
     statuses: ['New Request', 'Call Confirmed', 'Pickup Assigned'],
   },
   {
@@ -210,6 +127,83 @@ const STATUS_GROUPS = [
   },
 ];
 
+// Helper: Format exact booking timestamp ("Samne wale ne kab book kiya tha")
+export function formatBookingTimestamp(raw?: string | null): {
+  fullDateTime: string;
+  timeAgo: string;
+  dateOnly: string;
+  timeOnly: string;
+} {
+  if (!raw) {
+    return {
+      fullDateTime: 'Recently',
+      timeAgo: 'Recently',
+      dateOnly: 'Today',
+      timeOnly: 'Standard Slot',
+    };
+  }
+
+  const parsed = new Date(raw);
+  if (isNaN(parsed.getTime())) {
+    return {
+      fullDateTime: raw,
+      timeAgo: raw,
+      dateOnly: raw,
+      timeOnly: '',
+    };
+  }
+
+  const day = parsed.getDate().toString().padStart(2, '0');
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = monthNames[parsed.getMonth()];
+  const year = parsed.getFullYear();
+  const timeOnly = parsed.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const fullDateTime = `${day} ${month} ${year}, ${timeOnly}`;
+  const dateOnly = `${day} ${month} ${year}`;
+
+  const diffMs = Date.now() - parsed.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  let timeAgo = 'Just now';
+  if (diffMins < 1) timeAgo = 'Just now';
+  else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+  else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+  else if (diffDays === 1) timeAgo = 'Yesterday';
+  else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+  else timeAgo = dateOnly;
+
+  return { fullDateTime, timeAgo, dateOnly, timeOnly };
+}
+
+// Synthesized audio chime for new live order notification
+function playNewOrderSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audioCtx = new AudioContextClass();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.12); // A5
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.4);
+  } catch {
+    // Audio autoplay restrictions before user gesture
+  }
+}
+
 export function CrmPortal({
   onBackToStore,
   onLogout,
@@ -217,15 +211,21 @@ export function CrmPortal({
   onBackToStore: () => void;
   onLogout?: () => void;
 }) {
-  const [orders, setOrders] = useState<CrmOrder[]>(INITIAL_DEMO_ORDERS);
-  const [selectedId, setSelectedId] = useState<string>(INITIAL_DEMO_ORDERS[0].id);
+  // Orders state initialized EMPTY for clean client handover
+  const [orders, setOrders] = useState<CrmOrder[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<CrmOrder | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   const [search, setSearch] = useState('');
-  const [activeNav, setActiveNav] = useState<'all' | 'calls' | 'pickups' | 'quotes' | 'ready' | 'delivered'>('all');
+  const [activeNav, setActiveNav] = useState<'all' | 'calls' | 'pickups' | 'cleaning' | 'ready' | 'delivered' | 'cancelled'>('all');
   const [sortOption, setSortOption] = useState<'newest' | 'oldest' | 'amount_high' | 'amount_low'>('newest');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // WhatsApp drawer state
+  // WhatsApp Drawer state
   const [isWaOpen, setIsWaOpen] = useState(false);
   const [waInputMessage, setWaInputMessage] = useState('');
   const [sendingWa, setSendingWa] = useState(false);
@@ -245,6 +245,8 @@ export function CrmPortal({
   const [newCustPhoneError, setNewCustPhoneError] = useState('');
   const [newCustAddressError, setNewCustAddressError] = useState('');
 
+  const previousOrderCount = useRef<number>(0);
+
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMsg({ text, type });
     setTimeout(() => setToastMsg(null), 3500);
@@ -258,39 +260,79 @@ export function CrmPortal({
     setTimeout(() => setCopiedItem(null), 2000);
   };
 
-  // Sync bookings from API & Firebase RTDB & LocalStorage
+  function capitalizeStatus(s: string) {
+    if (s === 'new' || s === 'New') return 'New Request';
+    if (s === 'confirmed' || s === 'Confirmed') return 'Call Confirmed';
+    if (s === 'in-progress' || s === 'In Progress') return 'Cleaning In Progress';
+    if (s === 'completed' || s === 'Completed') return 'Delivered';
+    if (s === 'cancelled' || s === 'canceled') return 'Cancelled';
+    return s;
+  }
+
+  // Open the detail sidebar drawer for any contact / order
+  const handleOpenSidebar = (ord: CrmOrder) => {
+    setSelectedOrder(ord);
+    setIsSidebarOpen(true);
+  };
+
+  // Close the detail sidebar drawer
+  const handleCloseSidebar = () => {
+    setIsSidebarOpen(false);
+  };
+
+  // Sync bookings from API & Firebase RTDB
   useEffect(() => {
     let isMounted = true;
+
+    // Clean any old demo data keys from localStorage
+    try {
+      localStorage.removeItem('uclean_demo_orders');
+    } catch {
+      // ignore
+    }
 
     const fetchServerBookings = async () => {
       try {
         const res = await fetch('/api/bookings');
         const json = await res.json();
-        if (json.success && Array.isArray(json.bookings) && json.bookings.length > 0) {
-          const mapped: CrmOrder[] = json.bookings.map((b: any) => ({
-            id: b.id || b.orderId || `UC-${Math.floor(26100 + Math.random() * 8000)}`,
-            name: b.customerName || b.name || 'Online Customer',
-            phone: b.phone || '',
-            service: String(b.serviceType || b.service || 'Laundry Service'),
-            qty: b.quantity || b.qty || 'To estimate',
-            total: b.totalEstimate ? String(b.totalEstimate) : (b.total ? String(b.total) : 'To confirm'),
-            address: b.address || 'Nerul West',
-            slot: b.slot || `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Standard Slot'}`,
-            date: b.preferredDate || b.date || 'Today',
-            time: b.preferredTimeSlot || b.time || 'Standard Slot',
-            status: b.status ? capitalizeStatus(b.status) : 'New Request',
-            notes: typeof b.notes === 'string' ? b.notes : '',
-            items: typeof b.items === 'string' ? b.items : '',
-            createdAt: b.timestamp ? new Date(b.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (b.createdAt || 'Recent'),
-            callDone: b.status !== 'new' && b.status !== 'New Request',
-            pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(b.status),
-          }));
+        if (json.success && Array.isArray(json.bookings)) {
+          const mapped: CrmOrder[] = json.bookings.map((b: any) => {
+            const rawTime = b.createdAt || b.timestamp;
+            return {
+              id: b.id || b.orderId || `UC-${Math.floor(26100 + Math.random() * 8000)}`,
+              name: b.customerName || b.name || 'Customer',
+              phone: b.phone || '',
+              service: String(b.serviceType || b.service || 'Laundry Service'),
+              qty: b.quantity || b.qty || 'Standard Package',
+              total: b.totalEstimate ? String(b.totalEstimate) : (b.total ? String(b.total) : 'To confirm'),
+              address: b.address || 'Nerul West',
+              slot: b.slot || `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Standard Slot'}`,
+              date: b.preferredDate || b.date || 'Today',
+              time: b.preferredTimeSlot || b.time || 'Standard Slot',
+              status: b.status ? capitalizeStatus(b.status) : 'New Request',
+              notes: typeof b.notes === 'string' ? b.notes : '',
+              items: typeof b.items === 'string' ? b.items : '',
+              createdAt: rawTime || new Date().toISOString(),
+              timestamp: rawTime || new Date().toISOString(),
+              callDone: b.status !== 'new' && b.status !== 'New Request',
+              pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(b.status),
+            };
+          });
 
           if (isMounted) {
-            setOrders((prev) => {
-              const serverIds = new Set(mapped.map((o) => o.id));
-              const remainingPrev = prev.filter((o) => !serverIds.has(o.id));
-              return [...mapped, ...remainingPrev];
+            // Sound chime if new booking arrives live
+            if (previousOrderCount.current > 0 && mapped.length > previousOrderCount.current && soundEnabled) {
+              playNewOrderSound();
+              showToast('🔔 New Customer Booking Received!', 'success');
+            }
+            previousOrderCount.current = mapped.length;
+
+            setOrders(mapped);
+
+            // Keep selected order updated
+            setSelectedOrder((prev) => {
+              if (!prev) return null;
+              return mapped.find((m) => m.id === prev.id) || prev;
             });
           }
         }
@@ -300,10 +342,10 @@ export function CrmPortal({
     };
 
     fetchServerBookings();
-    loadLocalCache();
 
     const intervalId = setInterval(fetchServerBookings, 4000);
 
+    // Firebase RTDB Live Listener
     let unsubscribeRtdb = () => {};
     try {
       const bookingsRef = ref(rtdb, 'bookings');
@@ -312,32 +354,36 @@ export function CrmPortal({
         (snapshot) => {
           if (snapshot.exists()) {
             const val = snapshot.val();
-            const rtdbList: CrmOrder[] = Object.keys(val).map((k) => {
-              const item = val[k];
-              return {
-                id: item.id || item.orderId || k,
-                name: item.customerName || item.name || 'Online Customer',
-                phone: item.phone || '',
-                service: String(item.serviceType || item.service || 'Laundry Service'),
-                qty: item.quantity || item.qty || 'Standard Package',
-                total: item.totalEstimate ? String(item.totalEstimate) : (item.total ? String(item.total) : 'To confirm'),
-                address: item.address || 'Nerul West',
-                slot: item.slot || `${item.preferredDate || 'Today'} · ${item.preferredTimeSlot || 'Standard Slot'}`,
-                date: item.preferredDate || item.date || 'Today',
-                time: item.preferredTimeSlot || item.time || 'Standard Slot',
-                status: item.status ? capitalizeStatus(item.status) : 'New Request',
-                notes: typeof item.notes === 'string' ? item.notes : '',
-                items: typeof item.items === 'string' ? item.items : '',
-                createdAt: item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (item.createdAt || 'Recent'),
-                callDone: item.status !== 'new' && item.status !== 'New Request',
-                pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(item.status),
-              };
-            }).reverse();
+            const rtdbList: CrmOrder[] = Object.keys(val)
+              .map((k) => {
+                const item = val[k];
+                const rawTime = item.createdAt || item.timestamp;
+                return {
+                  id: item.id || item.orderId || k,
+                  name: item.customerName || item.name || 'Customer',
+                  phone: item.phone || '',
+                  service: String(item.serviceType || item.service || 'Laundry Service'),
+                  qty: item.quantity || item.qty || 'Standard Package',
+                  total: item.totalEstimate ? String(item.totalEstimate) : (item.total ? String(item.total) : 'To confirm'),
+                  address: item.address || 'Nerul West',
+                  slot: item.slot || `${item.preferredDate || 'Today'} · ${item.preferredTimeSlot || 'Standard Slot'}`,
+                  date: item.preferredDate || item.date || 'Today',
+                  time: item.preferredTimeSlot || item.time || 'Standard Slot',
+                  status: item.status ? capitalizeStatus(item.status) : 'New Request',
+                  notes: typeof item.notes === 'string' ? item.notes : '',
+                  items: typeof item.items === 'string' ? item.items : '',
+                  createdAt: rawTime || new Date().toISOString(),
+                  timestamp: rawTime || new Date().toISOString(),
+                  callDone: item.status !== 'new' && item.status !== 'New Request',
+                  pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(item.status),
+                };
+              })
+              .reverse();
 
-            if (isMounted) {
+            if (isMounted && rtdbList.length > 0) {
               setOrders((prev) => {
-                const liveIds = new Set(rtdbList.map((o) => o.id));
-                const remaining = prev.filter((o) => !liveIds.has(o.id));
+                const rtdbIds = new Set(rtdbList.map((o) => o.id));
+                const remaining = prev.filter((o) => !rtdbIds.has(o.id));
                 return [...rtdbList, ...remaining];
               });
             }
@@ -349,92 +395,41 @@ export function CrmPortal({
       console.warn('RTDB setup notice:', e);
     }
 
-    function loadLocalCache() {
-      try {
-        const local = JSON.parse(localStorage.getItem('uclean_local_bookings') || '[]');
-        if (Array.isArray(local) && local.length > 0) {
-          const cached: CrmOrder[] = local.map((b: any, idx: number) => ({
-            id: b.id || `UC-${26095 + idx}`,
-            name: b.customerName || 'Online Booking',
-            phone: b.phone || '',
-            service: b.serviceType || 'Laundry Service',
-            qty: '3 kg (est.)',
-            total: b.totalEstimate ? String(b.totalEstimate) : 'To confirm',
-            address: b.address || 'Nerul West',
-            slot: `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Afternoon'}`,
-            date: b.preferredDate || 'Today',
-            time: b.preferredTimeSlot || 'Afternoon',
-            status: b.status ? capitalizeStatus(b.status) : 'New Request',
-            notes: b.notes || 'Submitted via web booking form',
-            createdAt: 'Recent',
-            callDone: false,
-            pickupDone: false,
-          }));
-
-          if (isMounted) {
-            setOrders((prev) => {
-              const ids = new Set(prev.map((o) => o.id));
-              const additions = cached.filter((m) => !ids.has(m.id));
-              return [...additions, ...prev];
-            });
-          }
-        }
-      } catch (e) {
-        console.warn('Local cache read note:', e);
-      }
-    }
-
     return () => {
       isMounted = false;
       clearInterval(intervalId);
       unsubscribeRtdb();
     };
-  }, []);
+  }, [soundEnabled]);
 
-  function capitalizeStatus(s: string) {
-    if (s === 'new') return 'New Request';
-    if (s === 'confirmed') return 'Call Confirmed';
-    if (s === 'in-progress') return 'Cleaning In Progress';
-    if (s === 'completed') return 'Delivered';
-    return s;
-  }
-
-  // Selected Order
-  const selectedOrder = useMemo(() => {
-    return orders.find((o) => o.id === selectedId) || orders[0] || INITIAL_DEMO_ORDERS[0];
-  }, [orders, selectedId]);
-
-  // Operational KPI Counters based on business psychology
+  // Operational KPI Counters
   const opsCounters = useMemo(() => {
-    // 1. Calls Pending (Attention - Amber)
     const callsPending = orders.filter((o) => o.status === 'New Request' || !o.callDone);
-
-    // 2. Today's Pickups (Logistics - Blue)
     const pickupsToday = orders.filter(
       (o) =>
         (o.slot.toLowerCase().includes('today') || o.date?.toLowerCase().includes('today')) &&
         ['New Request', 'Call Confirmed', 'Pickup Assigned'].includes(o.status)
     );
-
-    // 3. Quotes Pending (Valuation - Purple)
-    const quotesPending = orders.filter((o) => ['Picked Up', 'At Store / Inspection', 'Quotation Sent'].includes(o.status));
-
-    // 4. Ready for Delivery (Fulfillment - Emerald)
-    const readyForDelivery = orders.filter((o) => o.status === 'Ready for Delivery' || o.status === 'Out for Delivery');
-
-    // 5. Total Active Pipeline
+    const inCleaning = orders.filter((o) =>
+      ['Picked Up', 'At Store / Inspection', 'Quotation Sent', 'Cleaning In Progress', 'Quality Check'].includes(o.status)
+    );
+    const readyDelivery = orders.filter((o) => o.status === 'Ready for Delivery' || o.status === 'Out for Delivery');
+    const delivered = orders.filter((o) => o.status === 'Delivered');
+    const cancelled = orders.filter((o) => o.status === 'Cancelled');
     const activePipeline = orders.filter((o) => o.status !== 'Delivered' && o.status !== 'Cancelled');
 
     return {
       callsPendingCount: callsPending.length,
       pickupsTodayCount: pickupsToday.length,
-      quotesPendingCount: quotesPending.length,
-      readyDeliveryCount: readyForDelivery.length,
+      inCleaningCount: inCleaning.length,
+      readyDeliveryCount: readyDelivery.length,
+      deliveredCount: delivered.length,
+      cancelledCount: cancelled.length,
       activePipelineCount: activePipeline.length,
     };
   }, [orders]);
 
-  // Filtered & Sorted orders list
+  // Filtered & Sorted orders
   const filteredOrders = useMemo(() => {
     const list = orders.filter((o) => {
       const q = search.toLowerCase().trim();
@@ -457,14 +452,17 @@ export function CrmPortal({
           ['New Request', 'Call Confirmed', 'Pickup Assigned'].includes(o.status)
         );
       }
-      if (activeNav === 'quotes') {
-        return ['Picked Up', 'At Store / Inspection', 'Quotation Sent'].includes(o.status);
+      if (activeNav === 'cleaning') {
+        return ['Picked Up', 'At Store / Inspection', 'Quotation Sent', 'Cleaning In Progress', 'Quality Check'].includes(o.status);
       }
       if (activeNav === 'ready') {
         return o.status === 'Ready for Delivery' || o.status === 'Out for Delivery';
       }
       if (activeNav === 'delivered') {
         return o.status === 'Delivered';
+      }
+      if (activeNav === 'cancelled') {
+        return o.status === 'Cancelled';
       }
       return true;
     });
@@ -482,179 +480,413 @@ export function CrmPortal({
         return valA - valB;
       }
       if (sortOption === 'oldest') {
-        return a.id.localeCompare(b.id);
+        const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+        const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+        return timeA - timeB;
       }
-      // default newest
-      return b.id.localeCompare(a.id);
+      // default newest first by booking timestamp
+      const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+      const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+      return timeB - timeA;
     });
   }, [orders, search, activeNav, sortOption]);
 
-  // Color Psychology Badges
-  // Amber: Attention / Pending confirmation (non-alarming alertness)
-  // Blue/Indigo: Verified, scheduled, logistics in motion (trust, order)
-  // Purple/Violet: Value appraisal, quotation, inspection (quality, precision)
-  // Cyan/Teal: Cleaning, washing, steam sanitizing (hygiene, freshness)
-  // Emerald: Completed, ready for handoff, delivered (success, reliability)
-  // Rose: Cancelled, refund, alert (critical caution)
+  // Color config for badges
   const getStatusConfig = (status: string) => {
     switch (status) {
       case 'New Request':
         return {
-          pillBg: 'bg-amber-50 text-amber-800 border-amber-200/90',
-          dot: 'bg-amber-500',
+          pillBg: 'bg-amber-50 text-amber-900 border-amber-300 font-bold',
+          dot: 'bg-amber-500 animate-pulse',
           accent: 'border-l-amber-500',
-          description: 'Awaiting phone confirmation from store',
+          badgeText: 'Call Pending',
         };
       case 'Call Confirmed':
         return {
-          pillBg: 'bg-blue-50 text-blue-800 border-blue-200/90',
+          pillBg: 'bg-blue-50 text-blue-900 border-blue-300 font-bold',
           dot: 'bg-blue-600',
           accent: 'border-l-blue-600',
-          description: 'Customer reached · Pickup slot locked',
+          badgeText: 'Call Confirmed',
         };
       case 'Pickup Assigned':
         return {
-          pillBg: 'bg-indigo-50 text-indigo-800 border-indigo-200/90',
+          pillBg: 'bg-indigo-50 text-indigo-900 border-indigo-300 font-bold',
           dot: 'bg-indigo-600',
           accent: 'border-l-indigo-600',
-          description: 'Rider assigned for doorstep pickup',
+          badgeText: 'Rider Assigned',
         };
       case 'Picked Up':
         return {
-          pillBg: 'bg-purple-50 text-purple-800 border-purple-200/90',
+          pillBg: 'bg-purple-50 text-purple-900 border-purple-300 font-bold',
           dot: 'bg-purple-600',
           accent: 'border-l-purple-600',
-          description: 'Garments safely collected from customer',
+          badgeText: 'Picked Up',
         };
       case 'At Store / Inspection':
         return {
-          pillBg: 'bg-violet-50 text-violet-800 border-violet-200/90',
+          pillBg: 'bg-violet-50 text-violet-900 border-violet-300 font-bold',
           dot: 'bg-violet-600',
           accent: 'border-l-violet-600',
-          description: 'Weighing, stain inspection & fabric tagging',
+          badgeText: 'In Store',
         };
       case 'Quotation Sent':
         return {
-          pillBg: 'bg-sky-50 text-sky-800 border-sky-200/90',
+          pillBg: 'bg-sky-50 text-sky-900 border-sky-300 font-bold',
           dot: 'bg-sky-600',
           accent: 'border-l-sky-600',
-          description: 'Price estimate sent to customer WhatsApp',
+          badgeText: 'Quote Sent',
         };
       case 'Cleaning In Progress':
         return {
-          pillBg: 'bg-teal-50 text-teal-800 border-teal-200/90',
+          pillBg: 'bg-teal-50 text-teal-900 border-teal-300 font-bold',
           dot: 'bg-teal-600',
           accent: 'border-l-teal-600',
-          description: 'Undergoing eco-wash / hydro-iron / dry cleaning',
+          badgeText: 'Cleaning',
         };
       case 'Quality Check':
         return {
-          pillBg: 'bg-cyan-50 text-cyan-800 border-cyan-200/90',
+          pillBg: 'bg-cyan-50 text-cyan-900 border-cyan-300 font-bold',
           dot: 'bg-cyan-600',
           accent: 'border-l-cyan-600',
-          description: 'Steam finish & packaging inspection',
+          badgeText: 'Quality Check',
         };
       case 'Ready for Delivery':
         return {
-          pillBg: 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold',
+          pillBg: 'bg-emerald-50 text-emerald-900 border-emerald-300 font-extrabold',
           dot: 'bg-emerald-600 animate-pulse',
           accent: 'border-l-emerald-600',
-          description: 'Packaged & ready for doorstep delivery',
+          badgeText: 'Ready',
         };
       case 'Out for Delivery':
         return {
-          pillBg: 'bg-emerald-50 text-emerald-900 border-emerald-400',
+          pillBg: 'bg-emerald-50 text-emerald-900 border-emerald-400 font-bold',
           dot: 'bg-emerald-700',
           accent: 'border-l-emerald-700',
-          description: 'Rider en-route with clean garments',
+          badgeText: 'Out For Delivery',
         };
       case 'Delivered':
         return {
           pillBg: 'bg-slate-100 text-slate-800 border-slate-300 font-semibold',
           dot: 'bg-slate-600',
           accent: 'border-l-slate-400',
-          description: 'Handed over to customer · Order closed',
+          badgeText: 'Delivered',
         };
       case 'Cancelled':
         return {
-          pillBg: 'bg-rose-50 text-rose-800 border-rose-200/90',
+          pillBg: 'bg-rose-50 text-rose-800 border-rose-300 font-bold',
           dot: 'bg-rose-600',
           accent: 'border-l-rose-600',
-          description: 'Cancelled by customer or store staff',
+          badgeText: 'Cancelled',
         };
       default:
         return {
           pillBg: 'bg-slate-50 text-slate-700 border-slate-200',
           dot: 'bg-slate-500',
           accent: 'border-l-slate-400',
-          description: 'Standard order status',
+          badgeText: status,
         };
     }
   };
 
-  // Status Changer
-  const handleStatusChange = async (newStatus: string) => {
+  // Status Change Handler
+  const handleStatusChange = async (targetId: string, newStatus: string) => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === selectedOrder.id ? { ...o, status: newStatus } : o))
+      prev.map((o) => (o.id === targetId ? { ...o, status: newStatus } : o))
     );
+
+    if (selectedOrder && selectedOrder.id === targetId) {
+      setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
 
     try {
       fetch('/api/bookings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: selectedOrder.id, status: newStatus }),
+        body: JSON.stringify({ id: targetId, status: newStatus }),
       }).catch(() => {});
 
-      update(ref(rtdb, `bookings/${selectedOrder.id}`), {
+      update(ref(rtdb, `bookings/${targetId}`), {
         status: newStatus,
       }).catch(() => {});
     } catch {
       // Local fallback
     }
 
-    showToast(`Order #${selectedOrder.id} status moved to "${newStatus}"`, 'info');
+    showToast(`Order #${targetId} moved to "${newStatus}"`, 'info');
   };
 
-  // Quick Action: Mark Call Done
-  const handleMarkCallDone = () => {
+  // Quick Action: Confirm Call
+  const handleMarkCallDone = (targetOrder: CrmOrder) => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === selectedOrder.id ? { ...o, callDone: true, status: 'Call Confirmed' } : o))
+      prev.map((o) =>
+        o.id === targetOrder.id
+          ? { ...o, callDone: true, status: 'Call Confirmed' }
+          : o
+      )
     );
-    showToast(`Call confirmed with ${selectedOrder.name}!`, 'success');
+    if (selectedOrder && selectedOrder.id === targetOrder.id) {
+      setSelectedOrder((prev) =>
+        prev ? { ...prev, callDone: true, status: 'Call Confirmed' } : null
+      );
+    }
+
+    fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: targetOrder.id, status: 'Call Confirmed' }),
+    }).catch(() => {});
+
+    update(ref(rtdb, `bookings/${targetOrder.id}`), {
+      status: 'Call Confirmed',
+    }).catch(() => {});
+
+    showToast(`Call confirmed with ${targetOrder.name}`, 'success');
+  };
+
+  // Quick Action: Assign Pickup
+  const handleAssignPickup = (targetOrder: CrmOrder) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === targetOrder.id
+          ? { ...o, callDone: true, status: 'Pickup Assigned' }
+          : o
+      )
+    );
+    if (selectedOrder && selectedOrder.id === targetOrder.id) {
+      setSelectedOrder((prev) =>
+        prev ? { ...prev, callDone: true, status: 'Pickup Assigned' } : null
+      );
+    }
+
+    fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: targetOrder.id, status: 'Pickup Assigned' }),
+    }).catch(() => {});
+
+    update(ref(rtdb, `bookings/${targetOrder.id}`), {
+      status: 'Pickup Assigned',
+    }).catch(() => {});
+
+    showToast(`Rider assigned for ${targetOrder.name}! Pickup scheduled.`, 'info');
+  };
+
+  // Quick Action: Cancel Order
+  const handleCancelOrder = (targetOrder: CrmOrder) => {
+    const confirmCancel = window.confirm(
+      `Are you sure you want to CANCEL Order #${targetOrder.id} (${targetOrder.name})?`
+    );
+    if (!confirmCancel) return;
+
+    handleStatusChange(targetOrder.id, 'Cancelled');
+    showToast(`Order #${targetOrder.id} has been CANCELLED`, 'error');
+  };
+
+  // Quick Action: Reactivate Cancelled Order
+  const handleReactivateOrder = (targetOrder: CrmOrder) => {
+    handleStatusChange(targetOrder.id, 'Call Confirmed');
+    showToast(`Order #${targetOrder.id} reactivated (Call Confirmed)!`, 'success');
   };
 
   // Quick Action: Mark Pickup Done
-  const handleMarkPickupDone = () => {
+  const handleMarkPickupDone = (targetOrder: CrmOrder) => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === selectedOrder.id ? { ...o, pickupDone: true, status: 'Picked Up' } : o))
+      prev.map((o) =>
+        o.id === targetOrder.id
+          ? { ...o, callDone: true, pickupDone: true, status: 'Picked Up' }
+          : o
+      )
     );
-    showToast(`Garments collected from ${selectedOrder.name}!`, 'success');
+    if (selectedOrder && selectedOrder.id === targetOrder.id) {
+      setSelectedOrder((prev) =>
+        prev ? { ...prev, callDone: true, pickupDone: true, status: 'Picked Up' } : null
+      );
+    }
+
+    fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: targetOrder.id, status: 'Picked Up' }),
+    }).catch(() => {});
+
+    update(ref(rtdb, `bookings/${targetOrder.id}`), {
+      status: 'Picked Up',
+    }).catch(() => {});
+
+    showToast(`Pickup completed! Garments collected from ${targetOrder.name}`, 'success');
+  };
+
+  // Quick Action: Start Washing
+  const handleStartCleaning = (targetOrder: CrmOrder) => {
+    handleStatusChange(targetOrder.id, 'Cleaning In Progress');
+    showToast(`Order #${targetOrder.id} moved to Cleaning / Wash!`, 'info');
+  };
+
+  // Delete single order
+  const handleDeleteOrder = async (orderId: string) => {
+    const sure = window.confirm(`Permanently remove Order #${orderId} from CRM database?`);
+    if (!sure) return;
+
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setIsSidebarOpen(false);
+      setSelectedOrder(null);
+    }
+
+    try {
+      await fetch(`/api/bookings?id=${orderId}`, { method: 'DELETE' });
+      set(ref(rtdb, `bookings/${orderId}`), null).catch(() => {});
+    } catch {
+      // Local
+    }
+
+    showToast(`Order #${orderId} removed`, 'info');
+  };
+
+  // Clear ALL data for clean client handover
+  const handleClearAllData = async () => {
+    const sure = window.confirm(
+      'CLIENT DELIVERY RESET: Clear all orders from CRM database to hand over a clean fresh portal to the client?'
+    );
+    if (!sure) return;
+
+    try {
+      await fetch('/api/bookings?clearAll=true', { method: 'DELETE' });
+      try {
+        localStorage.removeItem('uclean_local_bookings');
+        localStorage.removeItem('uclean_demo_orders');
+      } catch {
+        // ignore
+      }
+      setOrders([]);
+      setSelectedOrder(null);
+      setIsSidebarOpen(false);
+      showToast('All orders database cleared! Portal is now pristine for client.', 'success');
+    } catch (err) {
+      showToast('Failed to clear database', 'error');
+    }
+  };
+
+  // Export orders to CSV
+  const handleExportCSV = () => {
+    if (!orders.length) {
+      showToast('No orders to export yet!', 'error');
+      return;
+    }
+    const headers = [
+      'Order ID',
+      'Customer Name',
+      'Phone',
+      'Booked Date & Time',
+      'Scheduled Slot',
+      'Service Package',
+      'Amount Estimate',
+      'Status',
+      'Pickup Address',
+      'Notes',
+    ];
+    const rows = orders.map((o) => {
+      const timeInfo = formatBookingTimestamp(o.createdAt || o.timestamp);
+      return [
+        o.id,
+        `"${(o.name || '').replace(/"/g, '""')}"`,
+        `"${o.phone || ''}"`,
+        `"${timeInfo.fullDateTime}"`,
+        `"${(o.slot || '').replace(/"/g, '""')}"`,
+        `"${(o.service || '').replace(/"/g, '""')}"`,
+        `"${o.total || ''}"`,
+        `"${o.status || ''}"`,
+        `"${(o.address || '').replace(/"/g, '""')}"`,
+        `"${(o.notes || '').replace(/"/g, '""')}"`,
+      ];
+    });
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,\uFEFF' +
+      [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `uclean_orders_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Orders exported to CSV successfully!', 'success');
+  };
+
+  // Print Rider Slip
+  const handlePrintRiderSlip = (order: CrmOrder) => {
+    const timeInfo = formatBookingTimestamp(order.createdAt || order.timestamp);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>UClean Pickup Slip #${order.id}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; padding: 20px; max-width: 380px; margin: 0 auto; color: #111; line-height: 1.4; }
+            .header { text-align: center; border-bottom: 2px dashed #333; padding-bottom: 10px; margin-bottom: 12px; }
+            .header h2 { margin: 0; font-size: 18px; font-weight: 900; letter-spacing: 1px; }
+            .header p { margin: 2px 0; font-size: 11px; color: #444; }
+            .row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 12px; }
+            .bold { font-weight: bold; }
+            .address { border-top: 1px dashed #444; border-bottom: 1px dashed #444; padding: 8px 0; margin: 10px 0; font-size: 12px; }
+            .footer { text-align: center; font-size: 10px; margin-top: 15px; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>UCLEAN NERUL WEST</h2>
+            <p>Branch #104 · Doorstep Pickup & Delivery</p>
+            <p>Store Phone: +91 74004 74132</p>
+          </div>
+          <div class="row"><span class="bold">ORDER ID:</span> <span class="bold">#${order.id}</span></div>
+          <div class="row"><span class="bold">BOOKED ON:</span> <span>${timeInfo.fullDateTime}</span></div>
+          <div class="row"><span class="bold">CUSTOMER:</span> <span class="bold">${order.name}</span></div>
+          <div class="row"><span class="bold">PHONE:</span> <span class="bold">${order.phone}</span></div>
+          <div class="row"><span class="bold">SLOT:</span> <span>${order.slot}</span></div>
+          <div class="row"><span class="bold">SERVICE:</span> <span>${order.service}</span></div>
+          <div class="row"><span class="bold">ESTIMATE:</span> <span>${order.total}</span></div>
+          <div class="address">
+            <span class="bold">PICKUP ADDRESS:</span><br/>
+            ${order.address}
+          </div>
+          ${order.notes ? `<div style="font-size:11px; margin-bottom:8px;"><b>Instructions:</b> ${order.notes}</div>` : ''}
+          <div class="footer">
+            *** PLEASE WEIGH DIGITALLY IN FRONT OF CUSTOMER ***
+          </div>
+          <script>window.onload = function() { window.print(); }<\/script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   // WhatsApp Drawer Launcher
-  const openWhatsAppDrawer = (prefillTemplate?: 1 | 2 | 3) => {
+  const openWhatsAppDrawer = (order: CrmOrder, prefillTemplate?: 1 | 2 | 3) => {
+    setSelectedOrder(order);
     setIsWaOpen(true);
     let msg = '';
     if (prefillTemplate === 1) {
       msg = generateBookingConfirmationTemplate({
-        customerName: selectedOrder.name,
-        orderId: selectedOrder.id,
-        address: selectedOrder.address,
-        date: selectedOrder.date || 'Today',
-        time: selectedOrder.time || selectedOrder.slot,
+        customerName: order.name,
+        orderId: order.id,
+        address: order.address,
+        date: order.date || 'Today',
+        time: order.time || order.slot,
       });
     } else if (prefillTemplate === 2) {
       msg = generateQuotationTemplate({
-        customerName: selectedOrder.name,
-        orderId: selectedOrder.id,
-        services: selectedOrder.service + (selectedOrder.items ? ` (${selectedOrder.items})` : ''),
-        amount: quoteAmount || selectedOrder.total.replace(/[^\d]/g, '') || '450',
+        customerName: order.name,
+        orderId: order.id,
+        services: order.service + (order.items ? ` (${order.items})` : ''),
+        amount: quoteAmount || order.total.replace(/[^\d]/g, '') || '450',
       });
     } else if (prefillTemplate === 3) {
       msg = generateReadyForDeliveryTemplate({
-        customerName: selectedOrder.name,
-        orderId: selectedOrder.id,
-        amount: quoteAmount || selectedOrder.total || '450',
+        customerName: order.name,
+        orderId: order.id,
+        amount: quoteAmount || order.total || '450',
       });
     }
     if (msg) {
@@ -662,13 +894,9 @@ export function CrmPortal({
     }
   };
 
-  const applyTemplate = (tmpl: 1 | 2 | 3) => {
-    openWhatsAppDrawer(tmpl);
-  };
-
   // Send WhatsApp message
   const handleSendWhatsAppMessage = async () => {
-    if (!selectedOrder.phone) {
+    if (!selectedOrder?.phone) {
       showToast('Customer phone number is missing!', 'error');
       return;
     }
@@ -696,12 +924,19 @@ export function CrmPortal({
         }));
 
         setWaInputMessage('');
-        showToast(`WhatsApp delivered to ${selectedOrder.name}!`, 'success');
+        showToast(`WhatsApp message delivered to ${selectedOrder.name}!`, 'success');
       } else {
-        showToast(`Delivery notice: ${res.message || 'Check gateway'}`, 'error');
+        showToast(`Delivery note: ${res.message || 'WhatsApp Web opened'}`, 'info');
+        window.open(
+          `https://wa.me/${selectedOrder.phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
+          '_blank'
+        );
       }
     } catch {
-      showToast('Failed to dispatch WhatsApp message.', 'error');
+      window.open(
+        `https://wa.me/${selectedOrder.phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
+        '_blank'
+      );
     } finally {
       setSendingWa(false);
     }
@@ -733,26 +968,30 @@ export function CrmPortal({
     setNewCustAddressError('');
 
     const newId = 'UC-' + Math.floor(26100 + Math.random() * 8000);
+    const nowIso = new Date().toISOString();
+
     const newOrd: CrmOrder = {
       id: newId,
       name: nameVal.formatted || newCustName.trim(),
       phone: phoneVal.formatted || newCustPhone.trim(),
       service: newCustService,
       qty: 'Standard package',
-      total: newCustAmount || 'To confirm',
+      total: newCustAmount ? `₹${newCustAmount}` : 'To confirm',
       address: addressVal.formatted || newCustAddress.trim(),
       slot: newCustSlot,
       date: newCustSlot.split('·')[0]?.trim() || 'Today',
       time: newCustSlot.split('·')[1]?.trim() || 'Afternoon',
       status: 'New Request',
       notes: newCustNotes.trim() || 'Walk-in / Phone order logged by desk staff',
-      createdAt: 'Just now',
+      createdAt: nowIso,
+      timestamp: nowIso,
       callDone: false,
       pickupDone: false,
     };
 
     setOrders([newOrd, ...orders]);
-    setSelectedId(newId);
+    setSelectedOrder(newOrd);
+    setIsSidebarOpen(true);
     setNewOrderModalOpen(false);
     setNewCustName('');
     setNewCustPhone('');
@@ -774,14 +1013,16 @@ export function CrmPortal({
     showToast(`Order #${newId} logged successfully!`, 'success');
   };
 
-  // Copy full order details for delivery rider dispatch
-  const handleCopyRiderDispatch = () => {
-    const text = `*UCLEAN PICKUP DISPATCH*\nOrder: #${selectedOrder.id}\nCustomer: ${selectedOrder.name}\nPhone: ${selectedOrder.phone}\nSlot: ${selectedOrder.slot}\nAddress: ${selectedOrder.address}\nServices: ${selectedOrder.service}\nNotes: ${selectedOrder.notes || 'None'}`;
+  // Copy dispatch summary
+  const handleCopyRiderDispatch = (ord: CrmOrder) => {
+    const timeInfo = formatBookingTimestamp(ord.createdAt || ord.timestamp);
+    const text = `*UCLEAN PICKUP DISPATCH*\nOrder: #${ord.id}\nBooked: ${timeInfo.fullDateTime}\nCustomer: ${ord.name}\nPhone: ${ord.phone}\nSlot: ${ord.slot}\nAddress: ${ord.address}\nServices: ${ord.service}\nNotes: ${ord.notes || 'None'}`;
     copyToClipboard(text, 'Rider Dispatch Slip');
   };
 
   // Current lifecycle index for selected order
   const currentLifecycleIndex = useMemo(() => {
+    if (!selectedOrder) return 0;
     const current = selectedOrder.status;
     if (current === 'New Request') return 0;
     if (current === 'Call Confirmed' || current === 'Pickup Assigned') return 1;
@@ -790,617 +1031,1146 @@ export function CrmPortal({
     if (current === 'Cleaning In Progress' || current === 'Quality Check') return 4;
     if (current === 'Ready for Delivery' || current === 'Out for Delivery') return 5;
     if (current === 'Delivered') return 6;
-    return 0;
-  }, [selectedOrder.status]);
+    return -1; // Cancelled or unknown
+  }, [selectedOrder]);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
       
       {/* ========================================================================= */}
-      {/* 1. LEFT EXECUTIVE DESK SIDEBAR (Deep Charcoal/Slate for High Focus & Ergonomics) */}
+      {/* 1. TOP EXECUTIVE CRM CONTROL BAR */}
       {/* ========================================================================= */}
-      <aside className="w-64 bg-[#0F172A] text-slate-200 flex flex-col justify-between shrink-0 border-r border-slate-800/80 hidden md:flex min-h-screen sticky top-0 h-screen z-20 shadow-xl">
-        <div>
-          {/* Header Brand */}
-          <div className="p-4 px-5 border-b border-slate-800/80 bg-[#0B132B]">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-black text-white text-base shadow-sm ring-1 ring-white/10">
-                U
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="font-heading font-black text-sm tracking-tight text-white leading-tight">
-                    UCLEAN
-                  </h1>
-                  <span className="text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded border border-blue-400/30">
-                    CRM
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">
-                  Nerul West &bull; Branch #104
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Nav Categories */}
-          <div className="p-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 block mb-2">
-              Operational Views
-            </span>
-
-            <nav className="space-y-1 text-xs font-semibold">
-              {/* All Orders */}
+      <header className="bg-white border-b border-slate-200/90 sticky top-0 z-30 shadow-xs">
+        <div className="w-full max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          
+          {/* Brand & Live Indicator */}
+          <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-2.5">
               <button
-                onClick={() => setActiveNav('all')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                  activeNav === 'all'
-                    ? 'bg-blue-600 text-white shadow-sm font-bold'
-                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                }`}
+                onClick={onBackToStore}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer shrink-0"
+                title="Return to Customer Storefront"
               >
-                <div className="flex items-center gap-2.5">
-                  <Layers className="w-4 h-4 text-blue-400" />
-                  <span>All Active Orders</span>
-                </div>
-                <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px] font-mono font-bold">
-                  {orders.length}
-                </span>
+                <ArrowLeft className="w-4 h-4 shrink-0" />
               </button>
 
-              {/* Calls Pending (Amber Attention) */}
-              <button
-                onClick={() => setActiveNav('calls')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                  activeNav === 'calls'
-                    ? 'bg-amber-500 text-slate-950 font-black shadow-sm ring-1 ring-white/30'
-                    : 'text-amber-300/90 hover:bg-amber-500/10 hover:text-amber-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <PhoneCall className="w-4 h-4 text-amber-400" />
-                  <span>Baat Karna Hai (Calls)</span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-900 flex items-center justify-center font-black text-white text-base shadow-sm shrink-0">
+                  U
                 </div>
-                <span className="px-2 py-0.5 rounded-md bg-amber-400/30 text-amber-200 text-[11px] font-mono font-black border border-amber-300/30">
-                  {opsCounters.callsPendingCount}
-                </span>
-              </button>
-
-              {/* Pickups Today (Blue Logistics) */}
-              <button
-                onClick={() => setActiveNav('pickups')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                  activeNav === 'pickups'
-                    ? 'bg-blue-600 text-white font-black shadow-sm'
-                    : 'text-blue-300/90 hover:bg-blue-600/10 hover:text-blue-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Truck className="w-4 h-4 text-blue-400" />
-                  <span>Aaj Ka Pickup (Today)</span>
+                <div>
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <h1 className="font-heading font-black text-sm sm:text-base text-slate-900 leading-tight whitespace-nowrap">
+                      UCLEAN CRM
+                    </h1>
+                    <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      Live Cloud Sync
+                    </span>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate">
+                    Nerul West &bull; Store Dispatch Desk
+                  </p>
                 </div>
-                <span className="px-2 py-0.5 rounded-md bg-blue-500/30 text-blue-200 text-[11px] font-mono font-black border border-blue-400/30">
-                  {opsCounters.pickupsTodayCount}
-                </span>
-              </button>
-
-              {/* Quotation Pending (Purple Valuation) */}
-              <button
-                onClick={() => setActiveNav('quotes')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                  activeNav === 'quotes'
-                    ? 'bg-purple-600 text-white font-black shadow-sm'
-                    : 'text-purple-300/90 hover:bg-purple-600/10 hover:text-purple-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <DollarSign className="w-4 h-4 text-purple-400" />
-                  <span>Quotation Pending</span>
-                </div>
-                <span className="px-2 py-0.5 rounded-md bg-purple-500/30 text-purple-200 text-[11px] font-mono font-bold border border-purple-400/30">
-                  {opsCounters.quotesPendingCount}
-                </span>
-              </button>
-
-              {/* Ready for Delivery (Emerald Fulfillment) */}
-              <button
-                onClick={() => setActiveNav('ready')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                  activeNav === 'ready'
-                    ? 'bg-emerald-600 text-white font-black shadow-sm'
-                    : 'text-emerald-300/90 hover:bg-emerald-600/10 hover:text-emerald-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Package className="w-4 h-4 text-emerald-400" />
-                  <span>Ready for Delivery</span>
-                </div>
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 text-[11px] font-mono font-black border border-emerald-400/30">
-                  {opsCounters.readyDeliveryCount}
-                </span>
-              </button>
-
-              {/* Delivered Archive */}
-              <button
-                onClick={() => setActiveNav('delivered')}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all ${
-                  activeNav === 'delivered'
-                    ? 'bg-slate-700 text-white font-bold shadow-sm'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <CheckCheck className="w-4 h-4 text-slate-400" />
-                  <span>Delivered / Closed</span>
-                </div>
-              </button>
-            </nav>
-          </div>
-
-          {/* Quick WhatsApp Drawer trigger */}
-          <div className="p-3 pt-1">
-            <button
-              onClick={() => setIsWaOpen(!isWaOpen)}
-              className="w-full p-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 font-semibold text-xs flex items-center justify-between transition-colors border border-slate-700"
-            >
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-[#25D366]" />
-                <span>WhatsApp Desk</span>
-              </div>
-              <span className="text-[10px] bg-[#25D366]/20 text-[#25D366] font-bold px-1.5 py-0.5 rounded border border-[#25D366]/30">
-                Connected
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-slate-800 bg-[#0B132B]/80 space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Live Firebase Sync
-            </span>
-            <span className="font-mono text-[10px] text-slate-500">v3.2</span>
-          </div>
-
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors border border-rose-500/20 cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Log Out Admin</span>
-            </button>
-          )}
-
-          <button
-            onClick={onBackToStore}
-            className="w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700/80 cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
-            <span>Return to Store Front</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* ========================================================================= */}
-      {/* 2. MAIN OPERATIONS WORKSPACE */}
-      {/* ========================================================================= */}
-      <div className="flex-1 flex flex-col min-h-screen min-w-0 bg-[#F8FAFC]">
-        
-        {/* Top Control Header Bar */}
-        <header className="sticky top-0 z-30 bg-white border-b border-slate-200/90 px-4 py-3 sm:px-6 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            
-            {/* Search Input & Branch Indicator */}
-            <div className="flex items-center gap-3 flex-1 max-w-xl">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search customer, phone, order ID, address..."
-                  className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300/80 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 outline-none transition-all"
-                />
-                {search && (
-                  <button
-                    onClick={() => setSearch('')}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                    title="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Sort selector */}
-              <div className="relative hidden md:flex items-center shrink-0">
-                <select
-                  value={sortOption}
-                  onChange={(e) => setSortOption(e.target.value as any)}
-                  className="px-3 py-2 bg-slate-50 border border-slate-300/80 rounded-xl text-xs font-semibold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
-                >
-                  <option value="newest">Sort: Newest First</option>
-                  <option value="oldest">Sort: Oldest First</option>
-                  <option value="amount_high">Sort: Amount (High to Low)</option>
-                  <option value="amount_low">Sort: Amount (Low to High)</option>
-                </select>
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="flex items-center gap-2.5 self-end sm:self-auto">
-              <button
-                onClick={() => openWhatsAppDrawer()}
-                className="h-9 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-2 border border-slate-200 transition-colors"
-                title="Open WhatsApp Communication Desk"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" />
-                <span className="hidden sm:inline">WhatsApp Desk</span>
-              </button>
-
+            {/* Quick Order Button for Mobile Top Bar */}
+            <div className="flex items-center gap-1.5 md:hidden">
               <button
                 onClick={() => setNewOrderModalOpen(true)}
-                className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-2 shadow-xs transition-colors active:scale-98 cursor-pointer"
+                className="h-8 px-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ New Order</span>
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">+ Order</span>
               </button>
+            </div>
+          </div>
 
-              {onLogout && (
+          {/* Search Bar */}
+          <div className="w-full md:flex-1 md:max-w-md md:mx-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search customer, mobile, ID, address..."
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300/80 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition-all"
+              />
+              {search && (
                 <button
-                  onClick={onLogout}
-                  className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-semibold text-xs flex items-center gap-1.5 border border-slate-200 hover:border-rose-200 transition-colors cursor-pointer"
-                  title="Sign out of Admin Portal"
+                  onClick={() => setSearch('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                  title="Clear search"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Log Out</span>
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
           </div>
-        </header>
 
-        {/* ======================================================================= */}
-        {/* EXECUTIVE KPI METRIC STRIP (Grounding in Color Psychology) */}
-        {/* ======================================================================= */}
-        <section className="bg-white border-b border-slate-200/90 px-4 py-3.5 sm:px-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-            
-            {/* Card 1: 📞 Calls Pending ("Baat Karna Hai") — Amber for proactive attention */}
+          {/* Action Tools */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none w-full md:w-auto shrink-0">
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 shrink-0">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all ${
+                  viewMode === 'table' ? 'bg-white shadow-xs text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Table List View"
+              >
+                <List className="w-3.5 h-3.5 shrink-0" />
+              </button>
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`p-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all ${
+                  viewMode === 'cards' ? 'bg-white shadow-xs text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Cards Grid View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+              </button>
+            </div>
+
+            {/* Sound notification toggle */}
             <button
-              onClick={() => setActiveNav('calls')}
-              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
-                activeNav === 'calls'
-                  ? 'bg-amber-50/90 border-amber-400 ring-2 ring-amber-400/30 shadow-xs'
-                  : 'bg-slate-50/60 border-slate-200 hover:border-amber-300 hover:bg-amber-50/30'
+              onClick={() => {
+                setSoundEnabled(!soundEnabled);
+                showToast(soundEnabled ? 'Chime alerts muted' : 'Chime alerts activated', 'info');
+              }}
+              className={`p-2 rounded-xl border transition-colors shrink-0 ${
+                soundEnabled
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-slate-100 border-slate-200 text-slate-400'
               }`}
+              title={soundEnabled ? 'Live Order Sound: Active' : 'Live Order Sound: Muted'}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10.5px] font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <PhoneCall className="w-3 h-3 text-amber-600" />
-                  Calls To Make
-                </span>
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-heading font-black text-slate-900">
-                  {opsCounters.callsPendingCount}
-                </span>
-                <span className="text-[11px] text-amber-700 font-semibold">Baat Karna Hai</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                Pending phone verification
-              </div>
+              {soundEnabled ? <Volume2 className="w-4 h-4 shrink-0" /> : <VolumeX className="w-4 h-4 shrink-0" />}
             </button>
 
-            {/* Card 2: 🚚 Today's Pickups ("Aaj Ka Pickup") — Blue for planned logistics */}
+            {/* Export CSV button */}
             <button
-              onClick={() => setActiveNav('pickups')}
-              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
-                activeNav === 'pickups'
-                  ? 'bg-blue-50/90 border-blue-400 ring-2 ring-blue-400/30 shadow-xs'
-                  : 'bg-slate-50/60 border-slate-200 hover:border-blue-300 hover:bg-blue-50/30'
-              }`}
+              onClick={handleExportCSV}
+              className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs inline-flex items-center gap-1.5 border border-slate-200 transition-colors whitespace-nowrap shrink-0"
+              title="Download Orders to Excel / CSV"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10.5px] font-bold text-blue-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <Truck className="w-3 h-3 text-blue-600" />
-                  Today's Pickups
-                </span>
-                <span className="w-2 h-2 rounded-full bg-blue-500" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-heading font-black text-slate-900">
-                  {opsCounters.pickupsTodayCount}
-                </span>
-                <span className="text-[11px] text-blue-700 font-semibold">Aaj Ka Pickup</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                Scheduled for today
-              </div>
+              <Download className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+              <span className="whitespace-nowrap">Export CSV</span>
             </button>
 
-            {/* Card 3: 💰 Quotations Awaiting — Purple for precision & valuation */}
+            {/* + New Order Button (Desktop view) */}
             <button
-              onClick={() => setActiveNav('quotes')}
-              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
-                activeNav === 'quotes'
-                  ? 'bg-purple-50/90 border-purple-400 ring-2 ring-purple-400/30 shadow-xs'
-                  : 'bg-slate-50/60 border-slate-200 hover:border-purple-300 hover:bg-purple-50/30'
-              }`}
+              onClick={() => setNewOrderModalOpen(true)}
+              className="hidden md:inline-flex h-9 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs items-center gap-1.5 shadow-xs transition-colors active:scale-98 cursor-pointer whitespace-nowrap shrink-0"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10.5px] font-bold text-purple-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <DollarSign className="w-3 h-3 text-purple-600" />
-                  Quotes Pending
-                </span>
-                <span className="w-2 h-2 rounded-full bg-purple-500" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-heading font-black text-slate-900">
-                  {opsCounters.quotesPendingCount}
-                </span>
-                <span className="text-[11px] text-purple-700 font-semibold">Inspection</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                Weighing & price quotes
-              </div>
+              <Plus className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">+ New Order</span>
             </button>
 
-            {/* Card 4: 📦 Ready for Delivery — Emerald for completion & fresh fulfillment */}
+            {/* Clear All Data (Client Handover Tool) */}
             <button
-              onClick={() => setActiveNav('ready')}
-              className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
-                activeNav === 'ready'
-                  ? 'bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-400/30 shadow-xs'
-                  : 'bg-slate-50/60 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/30'
-              }`}
+              onClick={handleClearAllData}
+              className="h-9 px-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 font-semibold text-xs inline-flex items-center gap-1 border border-slate-200 hover:border-rose-200 transition-colors whitespace-nowrap shrink-0"
+              title="Client Delivery Reset: Clear all bookings data"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10.5px] font-bold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <Package className="w-3 h-3 text-emerald-600" />
-                  Ready Delivery
-                </span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-heading font-black text-slate-900">
-                  {opsCounters.readyDeliveryCount}
-                </span>
-                <span className="text-[11px] text-emerald-700 font-semibold">Packed</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                Freshly cleaned & bagged
-              </div>
+              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Reset Data</span>
             </button>
 
-            {/* Card 5: 📋 Total Active Pipeline — Slate for stability */}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-semibold text-xs inline-flex items-center gap-1.5 border border-slate-200 hover:border-rose-200 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                title="Sign out of Admin Portal"
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">Log Out</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ========================================================================= */}
+      {/* 2. OPERATIONAL KPI METRIC CARDS STRIP */}
+      {/* ========================================================================= */}
+      <section className="bg-white border-b border-slate-200/90 px-3 sm:px-6 lg:px-8 py-3">
+        <div className="w-full max-w-[1920px] mx-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+          
+          {/* Card 1: 📞 Calls Pending */}
+          <button
+            onClick={() => setActiveNav('calls')}
+            className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
+              activeNav === 'calls'
+                ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-400/30 shadow-xs'
+                : 'bg-slate-50/70 border-slate-200 hover:border-amber-300 hover:bg-amber-50/40'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1 whitespace-nowrap truncate">
+                <PhoneCall className="w-3 h-3 text-amber-600 shrink-0" />
+                Calls Pending
+              </span>
+              {opsCounters.callsPendingCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              )}
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between">
+              <span className="text-xl font-heading font-black text-slate-900">
+                {opsCounters.callsPendingCount}
+              </span>
+              <span className="text-[11px] text-amber-700 font-bold whitespace-nowrap">To Call</span>
+            </div>
+          </button>
+
+          {/* Card 2: 🚚 Today's Pickups */}
+          <button
+            onClick={() => setActiveNav('pickups')}
+            className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
+              activeNav === 'pickups'
+                ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-400/30 shadow-xs'
+                : 'bg-slate-50/70 border-slate-200 hover:border-blue-300 hover:bg-blue-50/40'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wide flex items-center gap-1 whitespace-nowrap truncate">
+                <Truck className="w-3 h-3 text-blue-600 shrink-0" />
+                Today's Pickups
+              </span>
+              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between">
+              <span className="text-xl font-heading font-black text-slate-900">
+                {opsCounters.pickupsTodayCount}
+              </span>
+              <span className="text-[11px] text-blue-700 font-bold whitespace-nowrap">Due Today</span>
+            </div>
+          </button>
+
+          {/* Card 3: 🧼 Workshop / In Cleaning */}
+          <button
+            onClick={() => setActiveNav('cleaning')}
+            className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
+              activeNav === 'cleaning'
+                ? 'bg-teal-50 border-teal-400 ring-2 ring-teal-400/30 shadow-xs'
+                : 'bg-slate-50/70 border-slate-200 hover:border-teal-300 hover:bg-teal-50/40'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-teal-900 uppercase tracking-wide flex items-center gap-1 whitespace-nowrap truncate">
+                <Sparkles className="w-3 h-3 text-teal-600 shrink-0" />
+                In Cleaning
+              </span>
+              <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between">
+              <span className="text-xl font-heading font-black text-slate-900">
+                {opsCounters.inCleaningCount}
+              </span>
+              <span className="text-[11px] text-teal-700 font-bold whitespace-nowrap">Workshop</span>
+            </div>
+          </button>
+
+          {/* Card 4: 📦 Ready for Delivery */}
+          <button
+            onClick={() => setActiveNav('ready')}
+            className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
+              activeNav === 'ready'
+                ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-400/30 shadow-xs'
+                : 'bg-slate-50/70 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wide flex items-center gap-1 whitespace-nowrap truncate">
+                <Package className="w-3 h-3 text-emerald-600 shrink-0" />
+                Ready Delivery
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between">
+              <span className="text-xl font-heading font-black text-slate-900">
+                {opsCounters.readyDeliveryCount}
+              </span>
+              <span className="text-[11px] text-emerald-700 font-bold whitespace-nowrap">Packed</span>
+            </div>
+          </button>
+
+          {/* Card 5: ❌ Cancelled */}
+          <button
+            onClick={() => setActiveNav('cancelled')}
+            className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
+              activeNav === 'cancelled'
+                ? 'bg-rose-50 border-rose-400 ring-2 ring-rose-400/30 shadow-xs'
+                : 'bg-slate-50/70 border-slate-200 hover:border-rose-300 hover:bg-rose-50/40'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-rose-900 uppercase tracking-wide flex items-center gap-1 whitespace-nowrap truncate">
+                <Ban className="w-3 h-3 text-rose-600 shrink-0" />
+                Cancelled
+              </span>
+              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between">
+              <span className="text-xl font-heading font-black text-slate-900">
+                {opsCounters.cancelledCount}
+              </span>
+              <span className="text-[11px] text-rose-700 font-bold whitespace-nowrap">Canceld</span>
+            </div>
+          </button>
+
+          {/* Card 6: 📋 Total Active */}
+          <button
+            onClick={() => setActiveNav('all')}
+            className={`p-3 rounded-2xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
+              activeNav === 'all'
+                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 whitespace-nowrap truncate ${
+                activeNav === 'all' ? 'text-slate-300' : 'text-slate-600'
+              }`}>
+                <Layers className="w-3 h-3 shrink-0" />
+                All Bookings
+              </span>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${activeNav === 'all' ? 'bg-blue-400' : 'bg-slate-400'}`} />
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between">
+              <span className={`text-xl font-heading font-black ${
+                activeNav === 'all' ? 'text-white' : 'text-slate-900'
+              }`}>
+                {orders.length}
+              </span>
+              <span className={`text-[11px] font-bold whitespace-nowrap ${
+                activeNav === 'all' ? 'text-blue-300' : 'text-slate-500'
+              }`}>
+                Total
+              </span>
+            </div>
+          </button>
+
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 3. MAIN WORKSPACE: FULL-WIDTH ORDERS & CONTACTS TABLE/GRID */}
+      {/* ========================================================================= */}
+      <main className="flex-1 w-full max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4">
+        
+        {/* Workspace Subheader with Filter Tabs & Sort */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3 px-4 rounded-2xl border border-slate-200/90 shadow-2xs">
+          
+          {/* Status Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-semibold pb-1 lg:pb-0 scrollbar-none">
             <button
               onClick={() => setActiveNav('all')}
-              className={`hidden lg:block p-3 rounded-2xl border text-left transition-all relative overflow-hidden group ${
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                 activeNav === 'all'
-                  ? 'bg-slate-100/90 border-slate-400 ring-2 ring-slate-400/30 shadow-xs'
-                  : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                  ? 'bg-blue-600 text-white font-bold shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-                  <Layers className="w-3 h-3 text-slate-600" />
-                  Active Pipeline
-                </span>
-                <span className="w-2 h-2 rounded-full bg-slate-500" />
-              </div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-xl font-heading font-black text-slate-900">
-                  {opsCounters.activePipelineCount}
-                </span>
-                <span className="text-[11px] text-slate-600 font-semibold">Total Orders</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                Currently tracking
-              </div>
+              All Orders ({orders.length})
             </button>
 
+            <button
+              onClick={() => setActiveNav('calls')}
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                activeNav === 'calls'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200/70'
+              }`}
+            >
+              <PhoneCall className="w-3 h-3 shrink-0" />
+              <span className="whitespace-nowrap">Calls Pending ({opsCounters.callsPendingCount})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('pickups')}
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                activeNav === 'pickups'
+                  ? 'bg-blue-600 text-white font-bold shadow-xs'
+                  : 'bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200/70'
+              }`}
+            >
+              <Truck className="w-3 h-3 shrink-0" />
+              <span className="whitespace-nowrap">Today's Pickups ({opsCounters.pickupsTodayCount})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('cleaning')}
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                activeNav === 'cleaning'
+                  ? 'bg-teal-600 text-white font-bold shadow-xs'
+                  : 'bg-teal-50 text-teal-900 hover:bg-teal-100 border border-teal-200/70'
+              }`}
+            >
+              <Sparkles className="w-3 h-3 shrink-0" />
+              <span className="whitespace-nowrap">In Cleaning ({opsCounters.inCleaningCount})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('ready')}
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                activeNav === 'ready'
+                  ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                  : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/70'
+              }`}
+            >
+              <Package className="w-3 h-3 shrink-0" />
+              <span className="whitespace-nowrap">Ready ({opsCounters.readyDeliveryCount})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('delivered')}
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                activeNav === 'delivered'
+                  ? 'bg-slate-800 text-white font-bold shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Check className="w-3 h-3 shrink-0" />
+              <span className="whitespace-nowrap">Delivered ({opsCounters.deliveredCount})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('cancelled')}
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                activeNav === 'cancelled'
+                  ? 'bg-rose-600 text-white font-bold shadow-xs'
+                  : 'bg-rose-50 text-rose-900 hover:bg-rose-100 border border-rose-200/70'
+              }`}
+            >
+              <Ban className="w-3 h-3 shrink-0" />
+              <span className="whitespace-nowrap">Cancelled ({opsCounters.cancelledCount})</span>
+            </button>
           </div>
-        </section>
+
+          {/* Sort Selector */}
+          <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+            <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Sort by:</span>
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value as any)}
+              className="px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
+            >
+              <option value="newest">Booking: Newest First</option>
+              <option value="oldest">Booking: Oldest First</option>
+              <option value="amount_high">Amount: High to Low</option>
+              <option value="amount_low">Amount: Low to High</option>
+            </select>
+          </div>
+        </div>
 
         {/* ======================================================================= */}
-        {/* 3. SPLIT WORKSPACE: ORDERS QUEUE (LEFT) + COMMAND CENTER (RIGHT) */}
+        {/* ORDERS DISPLAY: TABLE VIEW OR CARDS VIEW */}
         {/* ======================================================================= */}
-        <div className="flex-1 p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 min-w-0">
-          
-          {/* ORDERS QUEUE (5 columns) */}
-          <div className="lg:col-span-5 flex flex-col space-y-3 min-w-0">
-            
-            {/* Queue Control Strip */}
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-600 px-1">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-900 font-bold">
-                  {filteredOrders.length} {filteredOrders.length === 1 ? 'Order' : 'Orders'}
-                </span>
-                <span className="text-slate-400">&bull;</span>
-                <span className="capitalize text-slate-600">
-                  {activeNav === 'all' ? 'All Orders' : activeNav === 'calls' ? 'Pending Calls' : activeNav === 'pickups' ? "Today's Pickups" : activeNav}
-                </span>
-              </div>
-
-              {activeNav !== 'all' && (
+        {filteredOrders.length === 0 ? (
+          /* Empty State */
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs space-y-4 max-w-lg mx-auto mt-6">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto border border-slate-200 shadow-inner">
+              <ShoppingBag className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="font-heading font-black text-lg text-slate-900">
+                {orders.length === 0 ? 'No Active Orders' : 'No Matching Bookings'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                {orders.length === 0
+                  ? 'Portal is ready for client delivery! New customer bookings submitted through the storefront form or WhatsApp will arrive here live in real-time.'
+                  : 'Try clearing your search query or switching the status filter tab above.'}
+              </p>
+            </div>
+            <div className="pt-2 flex justify-center gap-2">
+              <button
+                onClick={() => setNewOrderModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Add Manual Order</span>
+              </button>
+              {orders.length > 0 && (
                 <button
-                  onClick={() => setActiveNav('all')}
-                  className="text-blue-600 hover:text-blue-800 text-[11px] font-semibold"
+                  onClick={() => {
+                    setActiveNav('all');
+                    setSearch('');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
                 >
-                  Clear filter
+                  Reset Filter
                 </button>
               )}
             </div>
+          </div>
+        ) : viewMode === 'table' ? (
+          /* ===================================================================== */
+          /* TABLE VIEW: FULL-WIDTH DENSE & CLEAR CONTACTS SPREAD */
+          /* ===================================================================== */
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto no-scrollbar">
+              <table className="w-full text-left border-collapse table-auto">
+                <thead>
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-2.5 px-3 whitespace-nowrap">Customer</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Order ID</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Booked On</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Pickup Slot</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Service</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Total</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Status</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs font-medium">
+                  {filteredOrders.map((ord) => {
+                    const timeInfo = formatBookingTimestamp(ord.createdAt || ord.timestamp);
+                    const cfg = getStatusConfig(ord.status);
 
-            {/* Orders Cards List */}
-            <div className="space-y-2.5 max-h-[calc(100vh-230px)] overflow-y-auto pr-1">
-              {filteredOrders.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 shadow-xs">
-                  <AlertCircle className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-                  <p className="text-sm font-bold text-slate-800">No matching orders found</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Try switching the filter or clear your search query.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setActiveNav('all');
-                      setSearch('');
-                    }}
-                    className="mt-3 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-800 transition-colors"
-                  >
-                    Reset Filters
-                  </button>
-                </div>
-              ) : (
-                filteredOrders.map((ord) => {
-                  const isSelected = ord.id === selectedId;
-                  const cfg = getStatusConfig(ord.status);
+                    return (
+                      <tr
+                        key={ord.id}
+                        onClick={() => handleOpenSidebar(ord)}
+                        className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                      >
+                        {/* Customer & Mobile */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                              {ord.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-heading font-black text-xs text-slate-900 group-hover:text-blue-700 block whitespace-nowrap truncate max-w-[130px] xl:max-w-[180px]">
+                                {ord.name}
+                              </span>
+                              <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="font-mono whitespace-nowrap">{ord.phone || 'No phone'}</span>
+                              </span>
+                            </div>
+                          </div>
+                        </td>
 
-                  return (
-                    <div
-                      key={ord.id}
-                      onClick={() => setSelectedId(ord.id)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative bg-white ${
-                        isSelected
-                          ? `border-blue-600 shadow-sm ring-1 ring-blue-500/30 ${cfg.accent} border-l-4 -translate-y-0.5`
-                          : 'border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
-                      }`}
-                    >
-                      {/* Top Row: Order ID, Status Chip, Time Ago */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        {/* Order ID */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-mono font-bold text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/90 whitespace-nowrap inline-block">
                             #{ord.id}
                           </span>
-                          {!ord.callDone && ord.status === 'New Request' && (
-                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Call pending" />
-                          )}
-                        </div>
+                        </td>
 
-                        <span
-                          className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border flex items-center gap-1 ${cfg.pillBg}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                          {ord.status}
-                        </span>
-                      </div>
+                        {/* Kab Book Kiya Tha (Booked On) */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="whitespace-nowrap">
+                            <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1 whitespace-nowrap">
+                              <Calendar className="w-3 h-3 text-blue-600 shrink-0" />
+                              <span className="whitespace-nowrap">{timeInfo.fullDateTime}</span>
+                            </span>
+                            <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded mt-0.5 inline-block whitespace-nowrap">
+                              {timeInfo.timeAgo}
+                            </span>
+                          </div>
+                        </td>
 
-                      {/* Middle Row: Customer Name & Amount */}
-                      <div className="mt-2 flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h4 className="font-heading font-black text-sm text-slate-900 leading-tight truncate">
-                            {ord.name}
-                          </h4>
-                          <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-slate-400" />
-                            <span>{ord.phone || 'No phone'}</span>
-                          </p>
-                        </div>
+                        {/* Pickup Schedule Window */}
+                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
+                          <div className="flex items-center gap-1 whitespace-nowrap">
+                            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="font-semibold text-[11px] whitespace-nowrap truncate max-w-[130px] block">
+                              {ord.slot}
+                            </span>
+                          </div>
+                        </td>
 
-                        <div className="text-right shrink-0">
-                          <span className="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        {/* Service Package */}
+                        <td className="py-2.5 px-3 text-slate-700 whitespace-nowrap">
+                          <span className="truncate max-w-[140px] xl:max-w-[190px] block font-medium text-[11px] whitespace-nowrap" title={ord.service}>
+                            {ord.service}
+                          </span>
+                        </td>
+
+                        {/* Total Amount */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-mono font-bold text-slate-900 text-xs whitespace-nowrap">
                             {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
                           </span>
-                          <p className="text-[10px] text-slate-400 font-medium mt-1">
-                            {ord.createdAt || 'Recent'}
-                          </p>
-                        </div>
-                      </div>
+                        </td>
 
-                      {/* Services & Scheduled Slot Info */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 gap-2">
-                        <span className="truncate max-w-[200px] text-slate-700 font-medium">
-                          {ord.service}
-                        </span>
-                        <span className="text-[11px] font-medium text-slate-500 shrink-0 flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          {ord.slot.split('·')[0]?.trim() || ord.slot}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                        {/* Status Chip */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${cfg.pillBg}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                            <span className="whitespace-nowrap">{ord.status}</span>
+                          </span>
+                        </td>
+
+                        {/* Quick Row Actions (Confirm Call, Assign Pickup, Picked Up, Cancel, Details) */}
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                            {/* Step 1: Confirm Call button */}
+                            {ord.status === 'New Request' && (
+                              <button
+                                onClick={() => handleMarkCallDone(ord)}
+                                className="h-7 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                title="Confirm Call with Customer"
+                              >
+                                <PhoneCall className="w-3 h-3 shrink-0" />
+                                <span className="whitespace-nowrap">Confirm Call</span>
+                              </button>
+                            )}
+
+                            {/* Step 2: Assign Pickup & Picked Up when Call Confirmed */}
+                            {ord.status === 'Call Confirmed' && (
+                              <>
+                                <button
+                                  onClick={() => handleAssignPickup(ord)}
+                                  className="h-7 px-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                  title="Assign Pickup (Dispatch Rider)"
+                                >
+                                  <Truck className="w-3 h-3 shrink-0" />
+                                  <span className="whitespace-nowrap">Assign Pickup</span>
+                                </button>
+                                <button
+                                  onClick={() => handleMarkPickupDone(ord)}
+                                  className="h-7 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                  title="Mark Clothes Picked Up"
+                                >
+                                  <Package className="w-3 h-3 shrink-0" />
+                                  <span className="whitespace-nowrap">Picked Up</span>
+                                </button>
+                              </>
+                            )}
+
+                            {/* Step 3: Picked Up when Pickup Assigned */}
+                            {ord.status === 'Pickup Assigned' && (
+                              <button
+                                onClick={() => handleMarkPickupDone(ord)}
+                                className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                title="Mark Clothes Picked Up"
+                              >
+                                <Package className="w-3 h-3 shrink-0" />
+                                <span className="whitespace-nowrap">Picked Up</span>
+                              </button>
+                            )}
+
+                            {/* Cancel button */}
+                            {ord.status !== 'Cancelled' && ord.status !== 'Delivered' && (
+                              <button
+                                onClick={() => handleCancelOrder(ord)}
+                                className="h-7 px-2 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-bold text-[10.5px] inline-flex items-center gap-1 border border-slate-200 hover:border-rose-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                title="Cancel Order"
+                              >
+                                <Ban className="w-3 h-3 text-rose-500 shrink-0" />
+                                <span className="whitespace-nowrap">Cancel</span>
+                              </button>
+                            )}
+
+                            {/* Reactivate button if Cancelled */}
+                            {ord.status === 'Cancelled' && (
+                              <button
+                                onClick={() => handleReactivateOrder(ord)}
+                                className="h-7 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10.5px] inline-flex items-center gap-1 border border-emerald-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                title="Reactivate Cancelled Order"
+                              >
+                                <RefreshCw className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span className="whitespace-nowrap">Reopen</span>
+                              </button>
+                            )}
+
+                            {/* View Sidebar Drawer */}
+                            <button
+                              onClick={() => handleOpenSidebar(ord)}
+                              className="h-7 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10.5px] inline-flex items-center gap-1 border border-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                              title="Open Order Details Sidebar"
+                            >
+                              <Eye className="w-3 h-3 text-slate-600 shrink-0" />
+                              <span className="whitespace-nowrap">Details</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
+        ) : (
+          /* ===================================================================== */
+          /* CARDS VIEW: MULTI-COLUMN INTERACTIVE CARDS GRID */
+          /* ===================================================================== */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
+            {filteredOrders.map((ord) => {
+              const timeInfo = formatBookingTimestamp(ord.createdAt || ord.timestamp);
+              const cfg = getStatusConfig(ord.status);
 
-          {/* ===================================================================== */}
-          {/* COMMAND CENTER: SELECTED ORDER DETAILS & LIFECYCLE (7 columns) */}
-          {/* ===================================================================== */}
-          <div className="lg:col-span-7 flex flex-col space-y-4 min-w-0">
-            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs p-5 sm:p-6 space-y-5">
-              
-              {/* Header: Customer, ID, Status, and Actions */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
-                    {selectedOrder.name.slice(0, 2).toUpperCase()}
+              return (
+                <div
+                  key={ord.id}
+                  onClick={() => handleOpenSidebar(ord)}
+                  className={`bg-white rounded-2xl border p-4 shadow-2xs hover:shadow-sm hover:border-blue-400 transition-all cursor-pointer relative ${cfg.accent} border-l-4`}
+                >
+                  {/* Top Bar: ID, Status, Booking time */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap shrink-0">
+                      #{ord.id}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${cfg.pillBg}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                      <span className="whitespace-nowrap">{ord.status}</span>
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200">
-                        #{selectedOrder.id}
-                      </span>
-                      <span
-                        className={`text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
-                          getStatusConfig(selectedOrder.status).pillBg
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${getStatusConfig(selectedOrder.status).dot}`} />
-                        {selectedOrder.status}
-                      </span>
+
+                  {/* Customer Info */}
+                  <div className="mt-3 flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-heading font-black text-sm text-slate-900 leading-tight truncate">
+                        {ord.name}
+                      </h4>
+                      <p className="text-xs text-slate-500 font-semibold mt-0.5 flex items-center gap-1 whitespace-nowrap">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="font-mono whitespace-nowrap">{ord.phone || 'No phone'}</span>
+                      </p>
                     </div>
-                    <h2 className="font-heading font-black text-xl text-slate-900 mt-1 tracking-tight">
-                      {selectedOrder.name}
-                    </h2>
+                    <span className="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap shrink-0">
+                      {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
+                    </span>
+                  </div>
+
+                  {/* Samne wale ne kab book kiya tha */}
+                  <div className="mt-2.5 p-2 rounded-xl bg-blue-50/60 border border-blue-100 flex items-center justify-between text-xs gap-1">
+                    <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1 whitespace-nowrap truncate">
+                      <Calendar className="w-3 h-3 text-blue-600 shrink-0" />
+                      <span className="whitespace-nowrap">{timeInfo.fullDateTime}</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-blue-700 whitespace-nowrap shrink-0">
+                      {timeInfo.timeAgo}
+                    </span>
+                  </div>
+
+                  {/* Service & Slot */}
+                  <div className="mt-2 space-y-1 text-xs text-slate-600">
+                    <div className="flex items-center gap-1.5 font-medium truncate">
+                      <Package className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{ord.service}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 font-medium truncate text-slate-500">
+                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{ord.slot}</span>
+                    </div>
+                  </div>
+
+                  {/* Quick Card Actions */}
+                  <div
+                    className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      {ord.status === 'New Request' && (
+                        <button
+                          onClick={() => handleMarkCallDone(ord)}
+                          className="h-7 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                          title="Confirm Call with Customer"
+                        >
+                          <PhoneCall className="w-3 h-3 shrink-0" />
+                          <span className="whitespace-nowrap">Confirm Call</span>
+                        </button>
+                      )}
+                      {ord.status === 'Call Confirmed' && (
+                        <>
+                          <button
+                            onClick={() => handleAssignPickup(ord)}
+                            className="h-7 px-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10.5px] inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                            title="Assign Pickup (Dispatch Rider)"
+                          >
+                            <Truck className="w-3 h-3 shrink-0" />
+                            <span className="whitespace-nowrap">Assign Pickup</span>
+                          </button>
+                          <button
+                            onClick={() => handleMarkPickupDone(ord)}
+                            className="h-7 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                            title="Mark Clothes Picked Up"
+                          >
+                            <Package className="w-3 h-3 shrink-0" />
+                            <span className="whitespace-nowrap">Picked Up</span>
+                          </button>
+                        </>
+                      )}
+                      {ord.status === 'Pickup Assigned' && (
+                        <button
+                          onClick={() => handleMarkPickupDone(ord)}
+                          className="h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                          title="Mark Clothes Picked Up"
+                        >
+                          <Package className="w-3 h-3 shrink-0" />
+                          <span className="whitespace-nowrap">Picked Up</span>
+                        </button>
+                      )}
+                      {ord.status !== 'Cancelled' && ord.status !== 'Delivered' && (
+                        <button
+                          onClick={() => handleCancelOrder(ord)}
+                          className="h-7 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10.5px] inline-flex items-center gap-1 border border-rose-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                          title="Cancel Order"
+                        >
+                          <Ban className="w-3 h-3 text-rose-600 shrink-0" />
+                          <span className="whitespace-nowrap">Cancel</span>
+                        </button>
+                      )}
+                      {ord.status === 'Cancelled' && (
+                        <button
+                          onClick={() => handleReactivateOrder(ord)}
+                          className="h-7 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10.5px] inline-flex items-center gap-1 border border-emerald-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                          title="Reopen Order"
+                        >
+                          <RefreshCw className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span className="whitespace-nowrap">Reopen</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => handleOpenSidebar(ord)}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-bold inline-flex items-center gap-0.5 ml-auto whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      <span className="whitespace-nowrap">View Details</span>
+                      <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                {/* Primary Quick Communications */}
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`tel:${selectedOrder.phone}`}
-                    className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs flex items-center gap-1.5 border border-slate-200 transition-colors"
-                    title="Direct Phone Call"
+      </main>
+
+      {/* ========================================================================= */}
+      {/* 4. SLIDE-OVER SIDEBAR DRAWER (OPENS WHEN ANY CONTACT / ORDER IS CLICKED) */}
+      {/* ========================================================================= */}
+      {isSidebarOpen && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200">
+          {/* Backdrop */}
+          <div
+            onClick={handleCloseSidebar}
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+          />
+
+          {/* Sidebar Drawer Panel */}
+          <div className="relative w-full sm:w-[520px] lg:w-[560px] bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col z-10 overflow-hidden animate-in slide-in-from-right duration-300">
+            
+            {/* Drawer Header */}
+            <div className="p-4 px-5 border-b border-slate-200/90 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-black text-sm shadow-sm shrink-0">
+                  {selectedOrder.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-slate-200 bg-white/10 px-2 py-0.5 rounded border border-white/20">
+                      #{selectedOrder.id}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                        getStatusConfig(selectedOrder.status).pillBg
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${getStatusConfig(selectedOrder.status).dot}`} />
+                      {selectedOrder.status}
+                    </span>
+                  </div>
+                  <h2 className="font-heading font-black text-lg text-white mt-0.5 leading-tight">
+                    {selectedOrder.name}
+                  </h2>
+                </div>
+              </div>
+
+              <button
+                onClick={handleCloseSidebar}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                title="Close Sidebar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Drawer Body (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              
+              {/* ================================================================= */}
+              {/* PROMINENT CARD: "KAB BOOK KIYA THA" (When Customer Placed Booking) */}
+              {/* ================================================================= */}
+              <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-blue-50/90 p-4 rounded-2xl border border-blue-200/90 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-[11px] uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    Customer Booking Timing
+                  </span>
+                  <span className="font-mono font-bold text-xs text-blue-800 bg-white/80 px-2 py-0.5 rounded border border-blue-200">
+                    {formatBookingTimestamp(selectedOrder.createdAt || selectedOrder.timestamp).timeAgo}
+                  </span>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-blue-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase block">
+                      Samne Wale Ne Kab Book Kiya:
+                    </span>
+                    <span className="font-heading font-black text-sm text-slate-900">
+                      {formatBookingTimestamp(selectedOrder.createdAt || selectedOrder.timestamp).fullDateTime}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase block">
+                      Requested Slot:
+                    </span>
+                    <span className="text-xs font-bold text-blue-700">
+                      {selectedOrder.slot}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ================================================================= */}
+              {/* OPERATIONAL LIFECYCLE ACTION HUB (CONFIRM CALL -> ASSIGN PICKUP -> MARK PICKED UP) */}
+              {/* ================================================================= */}
+              <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50 rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+                {/* Stage Header Banner */}
+                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>Next Action (Operational Stage)</span>
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border inline-flex items-center gap-1 shrink-0 ${
+                      getStatusConfig(selectedOrder.status).pillBg
+                    }`}
                   >
-                    <Phone className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Call</span>
-                  </a>
+                    <span className={`w-1.5 h-1.5 rounded-full ${getStatusConfig(selectedOrder.status).dot}`} />
+                    <span className="whitespace-nowrap">{selectedOrder.status}</span>
+                  </span>
+                </div>
 
+                {/* Status Guidance Banner */}
+                {selectedOrder.status === 'New Request' && (
+                  <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-amber-200/80 flex items-center justify-center shrink-0 text-amber-800 font-black text-xs">
+                      1
+                    </div>
+                    <div>
+                      <p className="font-bold text-amber-950">Step 1: Customer Call Verification Pending</p>
+                      <p className="text-[11px] text-amber-800">Call customer to verify order and confirm pickup schedule.</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedOrder.status === 'Call Confirmed' && (
+                  <div className="p-2.5 rounded-xl bg-blue-50/90 border border-blue-200 text-blue-900 text-xs flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-blue-200/80 flex items-center justify-center shrink-0 text-blue-800 font-black text-xs">
+                      2
+                    </div>
+                    <div>
+                      <p className="font-bold text-blue-950">Step 2: Call Confirmed ✓ — Schedule Pickup</p>
+                      <p className="text-[11px] text-blue-800">Call is confirmed. Assign a rider or record collection directly.</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedOrder.status === 'Pickup Assigned' && (
+                  <div className="p-2.5 rounded-xl bg-indigo-50/90 border border-indigo-200 text-indigo-900 text-xs flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-200/80 flex items-center justify-center shrink-0 text-indigo-800 font-black text-xs">
+                      3
+                    </div>
+                    <div>
+                      <p className="font-bold text-indigo-950">Step 3: Rider Dispatched — Doorstep Collection</p>
+                      <p className="text-[11px] text-indigo-800">Rider dispatched to customer address. Click 'Picked Up' once clothes are received.</p>
+                    </div>
+                  </div>
+                )}
+
+                {['Picked Up', 'At Store / Inspection'].includes(selectedOrder.status) && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-200/80 flex items-center justify-center shrink-0 text-emerald-800 font-black text-xs">
+                      ✓
+                    </div>
+                    <div>
+                      <p className="font-bold text-emerald-950">Clothes Received at Store / Workshop!</p>
+                      <p className="text-[11px] text-emerald-800">Begin inspection and cleaning workflow.</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedOrder.status === 'Cancelled' && (
+                  <div className="p-2.5 rounded-xl bg-rose-50/90 border border-rose-200 text-rose-900 text-xs flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-rose-200/80 flex items-center justify-center shrink-0 text-rose-800 font-black text-xs">
+                      ✕
+                    </div>
+                    <div>
+                      <p className="font-bold text-rose-950">Order Cancelled</p>
+                      <p className="text-[11px] text-rose-800">This order has been cancelled. Click below to reactivate if needed.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3 Step Action Grid (Sequential, Color-Coded, Single-Line) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+                  {/* Step 1: Confirm Call */}
                   <button
-                    onClick={() => openWhatsAppDrawer(1)}
-                    className="h-9 px-3.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors active:scale-95"
-                    title="Open WhatsApp Chat Drawer"
+                    onClick={() => handleMarkCallDone(selectedOrder)}
+                    className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
+                      selectedOrder.callDone || ['Call Confirmed', 'Pickup Assigned', 'Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                        : selectedOrder.status === 'New Request'
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs ring-2 ring-blue-400/50'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                    title="1. Confirm call with customer"
                   >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>WhatsApp</span>
+                    {selectedOrder.callDone || selectedOrder.status !== 'New Request' ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    ) : (
+                      <PhoneCall className="w-3.5 h-3.5 text-white shrink-0" />
+                    )}
+                    <span className="whitespace-nowrap">
+                      {selectedOrder.callDone || selectedOrder.status !== 'New Request'
+                        ? 'Call Confirmed ✓'
+                        : '1. Confirm Call'}
+                    </span>
                   </button>
 
+                  {/* Step 2: Assign Pickup */}
                   <button
-                    onClick={handleCopyRiderDispatch}
-                    className="h-9 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center gap-1 border border-slate-200 transition-colors"
-                    title="Copy Dispatch Summary for Rider / Driver"
+                    onClick={() => handleAssignPickup(selectedOrder)}
+                    className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
+                      selectedOrder.status === 'Pickup Assigned'
+                        ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400/50'
+                        : ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
+                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
+                        : selectedOrder.status === 'Call Confirmed'
+                        ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs ring-2 ring-amber-300'
+                        : 'bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-800 border border-slate-200'
+                    }`}
+                    title="2. Assign rider to collect clothes"
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Rider Slip</span>
+                    <Truck className="w-3.5 h-3.5 shrink-0" />
+                    <span className="whitespace-nowrap">
+                      {selectedOrder.status === 'Pickup Assigned'
+                        ? 'Rider Assigned ✓'
+                        : ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
+                        ? 'Pickup Done ✓'
+                        : '2. Assign Pickup'}
+                    </span>
+                  </button>
+
+                  {/* Step 3: Picked Up */}
+                  <button
+                    onClick={() => handleMarkPickupDone(selectedOrder)}
+                    className={`h-10 px-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-all active:scale-98 whitespace-nowrap shrink-0 cursor-pointer ${
+                      ['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                        : selectedOrder.status === 'Pickup Assigned' || selectedOrder.status === 'Call Confirmed'
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs ring-2 ring-emerald-400/50'
+                        : 'bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200'
+                    }`}
+                    title="3. Mark clothes collected from customer"
+                  >
+                    <Package className="w-3.5 h-3.5 shrink-0" />
+                    <span className="whitespace-nowrap">
+                      {['Picked Up', 'At Store / Inspection', 'Cleaning In Progress', 'Ready for Delivery', 'Delivered'].includes(selectedOrder.status)
+                        ? 'Picked Up ✓'
+                        : '3. Mark Picked Up'}
+                    </span>
                   </button>
                 </div>
+
+                {/* Additional next step for workshop if clothes already picked up */}
+                {['Picked Up', 'At Store / Inspection'].includes(selectedOrder.status) && (
+                  <div className="pt-1 flex items-center gap-2">
+                    <button
+                      onClick={() => handleStartCleaning(selectedOrder)}
+                      className="flex-1 h-9 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">Start Washing / Cleaning</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Secondary Row: Safe Cancellation / Reactivate Options */}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                  {selectedOrder.status === 'Cancelled' ? (
+                    <button
+                      onClick={() => handleReactivateOrder(selectedOrder)}
+                      className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-2xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3 shrink-0" />
+                      <span className="whitespace-nowrap">Reactivate Order</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleCancelOrder(selectedOrder)}
+                      className="h-8 px-2.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 font-semibold text-[11px] inline-flex items-center gap-1.5 border border-slate-200 hover:border-rose-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      title="Cancel this order if customer declined"
+                    >
+                      <Ban className="w-3 h-3 text-rose-500 shrink-0" />
+                      <span className="whitespace-nowrap">Cancel Order</span>
+                    </button>
+                  )}
+
+                  <span className="text-[10px] text-slate-400 font-medium ml-auto hidden sm:inline">
+                    Status: {selectedOrder.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Direct Communications Strip (Call, WhatsApp, Print Slip) */}
+              <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
+                <a
+                  href={`tel:${selectedOrder.phone}`}
+                  className="flex-1 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs inline-flex items-center justify-center gap-1.5 border border-slate-200 transition-colors whitespace-nowrap shrink-0"
+                >
+                  <Phone className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="whitespace-nowrap truncate">Call {selectedOrder.phone}</span>
+                </a>
+
+                <button
+                  onClick={() => openWhatsAppDrawer(selectedOrder, 1)}
+                  className="flex-1 h-9 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs inline-flex items-center justify-center gap-1.5 shadow-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">WhatsApp Chat</span>
+                </button>
+
+                <button
+                  onClick={() => handlePrintRiderSlip(selectedOrder)}
+                  className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs inline-flex items-center justify-center gap-1 border border-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  title="Print Thermal / Rider Pickup Slip"
+                >
+                  <Printer className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Print Slip</span>
+                </button>
               </div>
 
               {/* Order Lifecycle Visual Progress Stepper */}
-              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 space-y-2">
+              <div className="bg-slate-50/90 p-4 rounded-2xl border border-slate-200/90 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                   <span className="text-[11px] uppercase tracking-wider text-slate-500">
                     Order Lifecycle Pipeline
                   </span>
-                  <span className="text-blue-700 font-mono text-[11px]">
-                    Step {currentLifecycleIndex + 1} of 7
-                  </span>
+                  {selectedOrder.status === 'Cancelled' ? (
+                    <span className="text-rose-600 font-bold text-[11px]">
+                      STATUS: CANCELLED
+                    </span>
+                  ) : (
+                    <span className="text-blue-700 font-mono text-[11px]">
+                      Step {currentLifecycleIndex + 1} of 7
+                    </span>
+                  )}
                 </div>
 
                 {/* Stepper Dots */}
@@ -1412,11 +2182,9 @@ export function CrmPortal({
                     return (
                       <button
                         key={step.key}
-                        onClick={() => handleStatusChange(step.key)}
+                        onClick={() => handleStatusChange(selectedOrder.id, step.key)}
                         className={`group flex flex-col items-center text-center p-1 rounded-lg transition-all ${
-                          isCurrent
-                            ? 'bg-blue-600/10'
-                            : 'hover:bg-slate-200/50'
+                          isCurrent ? 'bg-blue-600/10' : 'hover:bg-slate-200/50'
                         }`}
                         title={`Click to set status to ${step.label}`}
                       >
@@ -1446,181 +2214,144 @@ export function CrmPortal({
                     );
                   })}
                 </div>
-              </div>
 
-              {/* Operational Action Buttons: Confirm Call & Pickup Complete */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={handleMarkCallDone}
-                  className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors active:scale-98"
-                >
-                  <PhoneCall className="w-4 h-4 text-blue-200" />
-                  <span>Baat Ho Gayi (Confirm Call)</span>
-                </button>
-
-                <button
-                  onClick={handleMarkPickupDone}
-                  className="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors active:scale-98"
-                >
-                  <Truck className="w-4 h-4 text-emerald-200" />
-                  <span>Pickup Complete (Kapde Le Liye)</span>
-                </button>
-              </div>
-
-              {/* Customer & Delivery Logistics Card */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/90 text-xs">
-                
-                {/* Pickup Address */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-slate-400" />
-                      Pickup Address
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(selectedOrder.address, 'Address')}
-                      className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-0.5"
-                    >
-                      <Copy className="w-2.5 h-2.5" />
-                      <span>Copy</span>
-                    </button>
+                {selectedOrder.status === 'Cancelled' && (
+                  <div className="mt-2 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                    <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>This booking is marked as <b>Cancelled</b>. Click any step above to reactivate.</span>
                   </div>
-                  <p className="font-semibold text-slate-900 leading-relaxed">
-                    {selectedOrder.address || 'Address not provided'}
-                  </p>
+                )}
+              </div>
+
+              {/* Customer Pickup Address & Maps */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                    Pickup Address
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(selectedOrder.address, 'Address')}
+                    className="text-[10.5px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-0.5"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy</span>
+                  </button>
+                </div>
+                <p className="font-semibold text-slate-900 leading-relaxed">
+                  {selectedOrder.address || 'Address not provided'}
+                </p>
+                <div className="pt-1 flex items-center justify-between">
                   <a
                     href={`https://maps.google.com/?q=${encodeURIComponent(
                       `${selectedOrder.address}, Nerul West, Navi Mumbai`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-semibold pt-0.5"
+                    className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-bold"
                   >
                     <Navigation className="w-3 h-3" />
-                    <span>Open in Google Maps</span>
+                    <span>Open in Google Maps &rarr;</span>
                   </a>
+                  <button
+                    onClick={() => handleCopyRiderDispatch(selectedOrder)}
+                    className="text-[11px] text-slate-600 hover:text-slate-900 font-semibold flex items-center gap-1"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy Rider Slip</span>
+                  </button>
                 </div>
+              </div>
 
-                {/* Scheduled Slot & Contact */}
-                <div className="space-y-1">
+              {/* Garments & Services Package */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 text-xs space-y-2">
+                <div className="flex items-center justify-between">
                   <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-slate-400" />
-                    Pickup Schedule
+                    <Package className="w-3.5 h-3.5 text-slate-400" />
+                    Garment &amp; Service Package
                   </span>
-                  <p className="font-semibold text-slate-900">
-                    {selectedOrder.slot || 'Standard pickup window'}
-                  </p>
-                  <div className="pt-1 flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold text-slate-500">Phone:</span>
-                    <span className="font-mono font-bold text-slate-900">{selectedOrder.phone}</span>
-                    <button
-                      onClick={() => copyToClipboard(selectedOrder.phone, 'Phone')}
-                      className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold"
-                    >
-                      Copy
-                    </button>
-                  </div>
+                  <span className="font-mono font-bold text-slate-900">
+                    Estimate: {selectedOrder.total.startsWith('₹') ? selectedOrder.total : `₹${selectedOrder.total}`}
+                  </span>
                 </div>
-
-                {/* Services & Instructions */}
-                <div className="space-y-1 sm:col-span-2 pt-2.5 border-t border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                      <Package className="w-3 h-3 text-slate-400" />
-                      Garment &amp; Service Package
-                    </span>
-                    <span className="text-xs font-mono font-bold text-slate-900">
-                      Estimate: {selectedOrder.total.startsWith('₹') ? selectedOrder.total : `₹${selectedOrder.total}`}
-                    </span>
+                <p className="font-bold text-slate-900 text-sm">
+                  {selectedOrder.service} {selectedOrder.items ? `— ${selectedOrder.items}` : ''}
+                </p>
+                {selectedOrder.notes && (
+                  <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 italic">
+                    &quot;{selectedOrder.notes}&quot;
                   </div>
-                  <p className="font-bold text-slate-900">
-                    {selectedOrder.service} {selectedOrder.items ? `— ${selectedOrder.items}` : ''}
-                  </p>
-                  {selectedOrder.notes && (
-                    <div className="mt-1 p-2 rounded-xl bg-white border border-slate-200 text-slate-700 italic">
-                      &quot;{selectedOrder.notes}&quot;
-                    </div>
-                  )}
-                </div>
-
+                )}
               </div>
 
               {/* WhatsApp Notification Action Cards (3 Clean Intent Templates) */}
-              <div className="space-y-2 pt-1 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    WhatsApp Customer Notifications:
-                  </span>
-                  <span className="text-[11px] text-[#25D366] font-semibold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#25D366] animate-pulse"></span>
-                    Evolution API Ready
-                  </span>
-                </div>
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">
+                  Send WhatsApp Customer Updates:
+                </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {/* Template 1: Pickup Confirmed */}
                   <button
-                    onClick={() => openWhatsAppDrawer(1)}
+                    onClick={() => openWhatsAppDrawer(selectedOrder, 1)}
                     className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200 hover:border-blue-300 text-left transition-all active:scale-98 group"
                   >
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700 block mb-0.5">
+                    <span className="text-[9.5px] font-bold uppercase tracking-wide text-blue-700 block">
                       Template 1
                     </span>
-                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-blue-900">
+                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-blue-900 mt-0.5">
                       Pickup Confirmed
                     </h5>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5">
-                      Send booking receipt
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Send receipt
                     </p>
                   </button>
 
                   {/* Template 2: Send Quotation */}
                   <button
-                    onClick={() => openWhatsAppDrawer(2)}
+                    onClick={() => openWhatsAppDrawer(selectedOrder, 2)}
                     className="p-3 rounded-2xl bg-slate-50 hover:bg-purple-50/60 border border-slate-200 hover:border-purple-300 text-left transition-all active:scale-98 group"
                   >
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-purple-700 block mb-0.5">
+                    <span className="text-[9.5px] font-bold uppercase tracking-wide text-purple-700 block">
                       Template 2
                     </span>
-                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-purple-900">
+                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-purple-900 mt-0.5">
                       Send Quotation
                     </h5>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5">
-                      Garment price estimate
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Garment price
                     </p>
                   </button>
 
                   {/* Template 3: Ready for Delivery */}
                   <button
-                    onClick={() => openWhatsAppDrawer(3)}
+                    onClick={() => openWhatsAppDrawer(selectedOrder, 3)}
                     className="p-3 rounded-2xl bg-slate-50 hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 text-left transition-all active:scale-98 group"
                   >
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 block mb-0.5">
+                    <span className="text-[9.5px] font-bold uppercase tracking-wide text-emerald-700 block">
                       Template 3
                     </span>
-                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-emerald-900">
+                    <h5 className="font-bold text-xs text-slate-900 group-hover:text-emerald-900 mt-0.5">
                       Ready for Delivery
                     </h5>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5">
-                      Delivery coordination
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Delivery notice
                     </p>
                   </button>
                 </div>
               </div>
 
-              {/* Status Switcher (Grouped Logically for Ergonomics & Clarity) */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
-                  Quick Status Transition:
+              {/* Status Transition Selector */}
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">
+                  Change Status Directly:
                 </span>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {STATUS_GROUPS.map((grp) => (
                     <div key={grp.group} className="space-y-1">
-                      <div className="text-[10.5px] font-bold text-slate-500 flex items-center gap-1.5">
+                      <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
                         <span>{grp.group}</span>
-                        <span className="text-slate-300">&bull;</span>
-                        <span className="font-normal text-slate-400">{grp.description}</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {grp.statuses.map((st) => {
@@ -1630,8 +2361,8 @@ export function CrmPortal({
                           return (
                             <button
                               key={st}
-                              onClick={() => handleStatusChange(st)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                              onClick={() => handleStatusChange(selectedOrder.id, st)}
+                              className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                                 isCurrent
                                   ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                                   : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
@@ -1648,16 +2379,26 @@ export function CrmPortal({
                 </div>
               </div>
 
+              {/* Delete Order option */}
+              <div className="pt-3 border-t border-slate-200 flex justify-end">
+                <button
+                  onClick={() => handleDeleteOrder(selectedOrder.id)}
+                  className="text-xs text-rose-600 hover:text-rose-800 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete This Order Permanently</span>
+                </button>
+              </div>
+
             </div>
           </div>
-
         </div>
-      </div>
+      )}
 
       {/* ========================================================================= */}
-      {/* 4. WHATSAPP WEB DESK SLIDE DRAWER */}
+      {/* 5. WHATSAPP WEB DESK SLIDE DRAWER */}
       {/* ========================================================================= */}
-      {isWaOpen && (
+      {isWaOpen && selectedOrder && (
         <div className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[440px] bg-[#EFEAE2] shadow-2xl border-l border-slate-300 flex flex-col animate-in slide-in-from-right duration-250">
           
           {/* Header (Official WhatsApp Palette #075E54) */}
@@ -1708,19 +2449,19 @@ export function CrmPortal({
           <div className="bg-[#F0F2F5] p-2.5 px-3 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px] font-semibold shrink-0">
             <span className="text-slate-500 text-[10px] uppercase font-bold shrink-0">Templates:</span>
             <button
-              onClick={() => applyTemplate(1)}
+              onClick={() => openWhatsAppDrawer(selectedOrder, 1)}
               className="px-2.5 py-1 rounded-full bg-white hover:bg-emerald-50 text-emerald-800 border border-slate-300 hover:border-emerald-400 transition-colors whitespace-nowrap shadow-2xs"
             >
               1. Pickup Receipt
             </button>
             <button
-              onClick={() => applyTemplate(2)}
+              onClick={() => openWhatsAppDrawer(selectedOrder, 2)}
               className="px-2.5 py-1 rounded-full bg-white hover:bg-purple-50 text-purple-800 border border-slate-300 hover:border-purple-400 transition-colors whitespace-nowrap shadow-2xs"
             >
               2. Quotation
             </button>
             <button
-              onClick={() => applyTemplate(3)}
+              onClick={() => openWhatsAppDrawer(selectedOrder, 3)}
               className="px-2.5 py-1 rounded-full bg-white hover:bg-blue-50 text-blue-800 border border-slate-300 hover:border-blue-400 transition-colors whitespace-nowrap shadow-2xs"
             >
               3. Ready Notice
@@ -1729,7 +2470,6 @@ export function CrmPortal({
 
           {/* Chat Bubble Body with WhatsApp Wallpaper */}
           <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#EFEAE2]">
-            
             {/* Notice */}
             <div className="text-center">
               <span className="inline-block bg-[#FFEECD] text-[#632608] text-[10px] px-3 py-1 rounded-lg shadow-2xs">
@@ -1776,7 +2516,7 @@ export function CrmPortal({
                 value={quoteAmount}
                 onChange={(e) => {
                   setQuoteAmount(e.target.value);
-                  applyTemplate(2);
+                  openWhatsAppDrawer(selectedOrder, 2);
                 }}
                 className="w-20 px-2 py-0.5 bg-white border border-slate-300 rounded-md text-xs font-bold outline-none"
               />
@@ -1797,7 +2537,7 @@ export function CrmPortal({
               type="button"
               disabled={sendingWa || !waInputMessage.trim()}
               onClick={handleSendWhatsAppMessage}
-              className="w-11 h-11 rounded-full bg-[#00A884] hover:bg-[#008f6f] text-white flex items-center justify-center shadow-md active:scale-95 disabled:opacity-40 transition-all shrink-0"
+              className="w-11 h-11 rounded-full bg-[#00A884] hover:bg-[#008f6f] text-white flex items-center justify-center shadow-md active:scale-95 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
               title="Dispatch message via WhatsApp"
             >
               {sendingWa ? (
@@ -1812,7 +2552,7 @@ export function CrmPortal({
       )}
 
       {/* ========================================================================= */}
-      {/* 5. ADD MANUAL ORDER MODAL */}
+      {/* 6. ADD MANUAL NEW ORDER MODAL */}
       {/* ========================================================================= */}
       {newOrderModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
@@ -1983,7 +2723,7 @@ export function CrmPortal({
                   rows={2}
                   value={newCustNotes}
                   onChange={(e) => setNewCustNotes(e.target.value)}
-                  placeholder="e.g. 5 Shirts, 2 Pants, urgent evening delivery"
+                  placeholder="e.g. 5 Shirts, 2 Pants, gentle steam press"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-blue-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none resize-none"
                 />
               </div>
@@ -1998,7 +2738,7 @@ export function CrmPortal({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 active:scale-98 transition-colors"
+                  className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 active:scale-98 transition-colors cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
                   <span>Create Booking</span>
@@ -2010,15 +2750,13 @@ export function CrmPortal({
       )}
 
       {/* ========================================================================= */}
-      {/* 6. TOAST NOTIFICATIONS */}
+      {/* 7. TOAST NOTIFICATIONS */}
       {/* ========================================================================= */}
       {toastMsg && (
         <div
           className={`fixed bottom-5 right-5 z-50 p-3.5 px-4 rounded-2xl shadow-lg flex items-center gap-2.5 border animate-in slide-in-from-bottom duration-250 max-w-md ${
             toastMsg.type === 'error'
               ? 'bg-rose-950 text-white border-rose-800'
-              : toastMsg.type === 'info'
-              ? 'bg-slate-900 text-white border-slate-800'
               : 'bg-slate-900 text-white border-slate-800'
           }`}
         >

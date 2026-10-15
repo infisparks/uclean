@@ -81,7 +81,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹119',
       priceUnit: '/item',
       image: '/images/dry-clean-luxury.jpg',
-      action: () => onSelectService("Dry Cleaning — Men's Suits & Ethnic", 'Suit / Blazer / Sherwani'),
+      action: () => onSelectService("Men's Suits & Ethnic", 'Suit / Blazer / Sherwani'),
     },
     {
       id: 'women-ethnic',
@@ -91,7 +91,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹69',
       priceUnit: '/item',
       image: '/images/saree-lehenga-luxury.jpg',
-      action: () => onSelectService("Dry Cleaning — Women's Ethnic", 'Silk Saree / Lehenga / Choli'),
+      action: () => onSelectService("Women's Ethnic & Saree Spa", 'Silk Saree / Lehenga / Choli'),
     },
     {
       id: 'winterwear-jackets',
@@ -101,7 +101,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹99',
       priceUnit: '/item',
       image: '/images/winterwear-luxury.jpg',
-      action: () => onSelectService('Dry Cleaning — Winterwear & Jackets', 'Leather Jacket / Coat / Sweater'),
+      action: () => onSelectService('Winterwear & Leather Care', 'Leather Jacket / Coat / Sweater'),
     },
     {
       id: 'dailywear-steam',
@@ -111,7 +111,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹25',
       priceUnit: '/item',
       image: '/images/steam-press-luxury.jpg',
-      action: () => onSelectService('Steam Ironing & Daily Wear', 'Shirts & Trousers'),
+      action: () => onSelectService('Shirts, Pants & Steam Press', 'Shirts & Trousers'),
     },
     {
       id: 'wash-fold',
@@ -121,7 +121,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹109',
       priceUnit: '/kg',
       image: '/images/wash-fold-luxury.jpg',
-      action: () => onSelectService('Wash & Fold — ₹109/kg', 'Everyday Laundry (Per Kg)'),
+      action: () => onSelectService('Wash & Fold Laundry', 'Everyday Laundry (Per Kg)'),
     },
     {
       id: 'wash-iron',
@@ -131,7 +131,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹149',
       priceUnit: '/kg',
       image: '/images/wash-iron-luxury.jpg',
-      action: () => onSelectService('Wash & Iron — ₹149/kg', 'Steam Pressed Laundry'),
+      action: () => onSelectService('Wash & Steam Iron', 'Steam Pressed Laundry'),
     },
     {
       id: 'shoe-spa',
@@ -141,7 +141,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹349',
       priceUnit: '/pair',
       image: '/images/shoe-spa-luxury.jpg',
-      action: () => onSelectService('Shoe Spa & Restoration', 'Leather Shoes / Sneakers / Boots'),
+      action: () => onSelectService('Footwear & Designer Shoe Spa', 'Leather Shoes / Sneakers / Boots'),
     },
     {
       id: 'shawls-accessories',
@@ -151,7 +151,7 @@ export function ChooseServiceHorizontal({
       priceAmount: '₹25',
       priceUnit: '/item',
       image: '/images/shawls-luxury.jpg',
-      action: () => onSelectService('Shawls & Accessories Care', 'Pashmina / Muffler / Tie'),
+      action: () => onSelectService('Shawls, Pashmina & Ties', 'Pashmina / Muffler / Tie'),
     },
   ];
 

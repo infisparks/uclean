@@ -29,8 +29,10 @@ import {
 } from '@/lib/validation';
 import {
   PRIMARY_SERVICES,
+  ALL_SERVICES_CATALOG,
   searchCatalog,
   CatalogService,
+  isServiceMatch,
 } from '@/lib/servicesCatalog';
 import { AllServicesModal } from '@/components/AllServicesModal';
 
@@ -64,18 +66,47 @@ function OrderFormContent() {
   const [phoneError, setPhoneError] = useState('');
   const [addressError, setAddressError] = useState('');
 
-  // 6 Primary services by default; searches entire 100+ services catalog when user types
+  // Primary services by default; if urlService is specified, that service is placed as the 1st card and auto-selected!
   const filteredAvailableServices = React.useMemo(() => {
     const raw = serviceSearch.toLowerCase().trim();
-    if (!raw) return PRIMARY_SERVICES;
-    return searchCatalog(raw, 'All');
-  }, [serviceSearch]);
+    if (raw) return searchCatalog(raw, 'All');
+
+    // If urlService is present, find it and ensure it's at index 0 (the first card)!
+    if (urlService) {
+      const matched =
+        PRIMARY_SERVICES.find(
+          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
+        ) ||
+        ALL_SERVICES_CATALOG.find(
+          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
+        );
+
+      if (matched) {
+        const others = PRIMARY_SERVICES.filter((s) => !isServiceMatch(s.id, matched.id));
+        return [matched, ...others];
+      }
+    }
+
+    return PRIMARY_SERVICES;
+  }, [serviceSearch, urlService]);
 
   useEffect(() => {
     if (urlService) {
-      setSelectedServices([urlService]);
+      const matched =
+        PRIMARY_SERVICES.find(
+          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
+        ) ||
+        ALL_SERVICES_CATALOG.find(
+          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
+        );
+
+      if (matched) {
+        setSelectedServices([matched.id]);
+      } else {
+        setSelectedServices([urlService]);
+      }
     } else {
-      setSelectedServices(['Wash & Fold — ₹109/kg']);
+      setSelectedServices([PRIMARY_SERVICES[0].id]);
     }
 
     if (urlGarment) {
@@ -84,11 +115,14 @@ function OrderFormContent() {
   }, [urlService, urlGarment]);
 
   const toggleService = (srvId: string) => {
-    setSelectedServices((prev) =>
-      prev.includes(srvId)
-        ? prev.filter((s) => s !== srvId)
-        : [...prev, srvId]
-    );
+    setSelectedServices((prev) => {
+      const exists = prev.some((s) => isServiceMatch(s, srvId));
+      if (exists) {
+        return prev.filter((s) => !isServiceMatch(s, srvId));
+      } else {
+        return [...prev, srvId];
+      }
+    });
   };
 
   const handleCopyId = () => {
@@ -420,14 +454,16 @@ function OrderFormContent() {
                     </div>
                   ) : (
                     filteredAvailableServices.slice(0, serviceSearch ? 20 : 6).map((srv) => {
-                      const isChecked = selectedServices.includes(srv.id);
+                      const isChecked = selectedServices.some(
+                        (s) => isServiceMatch(s, srv.id) || isServiceMatch(s, srv.name)
+                      );
                       return (
                         <label
                           key={srv.id}
                           onClick={() => toggleService(srv.id)}
                           className={`relative flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
                             isChecked
-                              ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-1.5 ring-[#008f51] shadow-xs'
+                              ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-2 ring-[#008f51] shadow-xs'
                               : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
                           }`}
                         >
