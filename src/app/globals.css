@@ -79,6 +79,44 @@ h1, h2, h3, h4, .font-heading {
   }
 }
 
+@keyframes splashShimmer {
+  0% {
+    transform: translateX(-140%) skewX(-20deg);
+  }
+  30%, 100% {
+    transform: translateX(250%) skewX(-20deg);
+  }
+}
+
+.btn-splash-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-splash-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 65%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 20%,
+    rgba(255, 255, 255, 0.7) 50%,
+    rgba(255, 255, 255, 0.08) 80%,
+    transparent 100%
+  );
+  animation: splashShimmer 3.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.btn-splash-shine:hover::before {
+  animation: splashShimmer 1.4s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @keyframes arrowNudge {
   0%, 100% {
     transform: translateX(0);

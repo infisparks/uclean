@@ -794,30 +794,6 @@ export function CrmPortal({
     showToast(`Order #${orderId} removed`, 'info');
   };
 
-  // Clear ALL data for clean client handover
-  const handleClearAllData = async () => {
-    const sure = window.confirm(
-      'CLIENT DELIVERY RESET: Clear all orders from CRM database to hand over a clean fresh portal to the client?'
-    );
-    if (!sure) return;
-
-    try {
-      await fetch('/api/bookings?clearAll=true', { method: 'DELETE' });
-      try {
-        localStorage.removeItem('uclean_local_bookings');
-        localStorage.removeItem('uclean_demo_orders');
-      } catch {
-        // ignore
-      }
-      setOrders([]);
-      setSelectedOrder(null);
-      setIsSidebarOpen(false);
-      showToast('All orders database cleared! Portal is now pristine for client.', 'success');
-    } catch (err) {
-      showToast('Failed to clear database', 'error');
-    }
-  };
-
   // Export orders to CSV
   const handleExportCSV = () => {
     if (!orders.length) {
@@ -945,13 +921,13 @@ export function CrmPortal({
     }
   };
 
-  // Send WhatsApp message (Instantaneous Optimistic UI + fast background API dispatch)
-  const handleSendWhatsAppMessage = async () => {
+  // Send WhatsApp message (Instantaneous Optimistic UI + non-blocking background API dispatch)
+  const handleSendWhatsAppMessage = async (customText?: string) => {
     if (!selectedOrder?.phone) {
       showToast('Customer phone number is missing!', 'error');
       return;
     }
-    const textToSend = waInputMessage.trim();
+    const textToSend = (typeof customText === 'string' ? customText : waInputMessage).trim();
     if (!textToSend) {
       showToast('Please type a message before sending.', 'error');
       return;
@@ -977,47 +953,40 @@ export function CrmPortal({
     }));
 
     // Clear textarea immediately so user can keep typing without feeling stuck
-    setWaInputMessage('');
-    setSendingWa(true);
+    if (typeof customText !== 'string') {
+      setWaInputMessage('');
+    }
 
-    try {
-      const res = await sendWhatsAppMessage(phone, textToSend);
-      if (res.success) {
-        // Upgrade checkmark to official WhatsApp blue double-check ✓✓
-        setChatHistory((prev) => ({
-          ...prev,
-          [orderId]: (prev[orderId] || []).map((m) =>
-            m.id === tempId ? { ...m, status: 'delivered' } : m
-          ),
-        }));
-        showToast(`WhatsApp message delivered to ${name}!`, 'success');
-      } else {
+    // Fast non-blocking background dispatch
+    sendWhatsAppMessage(phone, textToSend)
+      .then((res) => {
+        if (res.success) {
+          // Upgrade checkmark to official WhatsApp blue double-check ✓✓
+          setChatHistory((prev) => ({
+            ...prev,
+            [orderId]: (prev[orderId] || []).map((m) =>
+              m.id === tempId ? { ...m, status: 'delivered' } : m
+            ),
+          }));
+          showToast(`WhatsApp message delivered to ${name}!`, 'success');
+        } else {
+          setChatHistory((prev) => ({
+            ...prev,
+            [orderId]: (prev[orderId] || []).map((m) =>
+              m.id === tempId ? { ...m, status: 'failed' } : m
+            ),
+          }));
+          showToast(`Delivery note: ${res.message || 'WhatsApp Web fallback'}`, 'info');
+        }
+      })
+      .catch(() => {
         setChatHistory((prev) => ({
           ...prev,
           [orderId]: (prev[orderId] || []).map((m) =>
             m.id === tempId ? { ...m, status: 'failed' } : m
           ),
         }));
-        showToast(`Delivery note: ${res.message || 'WhatsApp Web opened'}`, 'info');
-        window.open(
-          `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
-          '_blank'
-        );
-      }
-    } catch {
-      setChatHistory((prev) => ({
-        ...prev,
-        [orderId]: (prev[orderId] || []).map((m) =>
-          m.id === tempId ? { ...m, status: 'failed' } : m
-        ),
-      }));
-      window.open(
-        `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(textToSend)}`,
-        '_blank'
-      );
-    } finally {
-      setSendingWa(false);
-    }
+      });
   };
 
   // Manual New Order Creator
@@ -1863,16 +1832,6 @@ export function CrmPortal({
               <span className="whitespace-nowrap">+ New Order</span>
             </button>
 
-            {/* Clear All Data (Client Handover Tool) */}
-            <button
-              onClick={handleClearAllData}
-              className="h-9 px-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 font-semibold text-xs inline-flex items-center gap-1 border border-slate-200 hover:border-rose-200 transition-colors whitespace-nowrap shrink-0"
-              title="Client Delivery Reset: Clear all bookings data"
-            >
-              <Trash2 className="w-3.5 h-3.5 shrink-0" />
-              <span className="whitespace-nowrap">Reset Data</span>
-            </button>
-
             {onLogout && (
               <button
                 onClick={onLogout}
@@ -2196,7 +2155,7 @@ export function CrmPortal({
                       }}
                       className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
                     >
-                      Reset Filter
+                      View All Orders
                     </button>
                   )}
                 </div>
@@ -2709,22 +2668,26 @@ export function CrmPortal({
               rows={3}
               value={waInputMessage}
               onChange={(e) => setWaInputMessage(e.target.value)}
-              placeholder="Type customer message or select a template above..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (waInputMessage.trim()) {
+                    handleSendWhatsAppMessage();
+                  }
+                }
+              }}
+              placeholder="Type customer message or select a template above... (Press Enter to send)"
               className="flex-1 px-3 py-2 bg-white border border-slate-300 focus:border-[#25D366] rounded-2xl text-xs outline-none resize-none leading-relaxed text-slate-800"
             />
 
             <button
               type="button"
-              disabled={sendingWa || !waInputMessage.trim()}
-              onClick={handleSendWhatsAppMessage}
+              disabled={!waInputMessage.trim()}
+              onClick={() => handleSendWhatsAppMessage()}
               className="w-11 h-11 rounded-full bg-[#00A884] hover:bg-[#008f6f] text-white flex items-center justify-center shadow-md active:scale-95 disabled:opacity-40 transition-all shrink-0 cursor-pointer"
-              title="Dispatch message via WhatsApp"
+              title="Dispatch message via WhatsApp (Press Enter)"
             >
-              {sendingWa ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <Send className="w-5 h-5 text-white" />
-              )}
+              <Send className="w-5 h-5 text-white" />
             </button>
           </div>
 

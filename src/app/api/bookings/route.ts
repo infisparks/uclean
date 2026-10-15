@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'bookings.json');
 
@@ -103,22 +105,37 @@ export async function POST(req: Request) {
     ensureDataFile();
     const newBooking = await req.json();
 
+    if (!newBooking || typeof newBooking !== 'object') {
+      return NextResponse.json({ success: false, message: 'Invalid booking data payload' }, { status: 400 });
+    }
+
+    const rawId = String(newBooking.id || newBooking.orderId || '').trim();
+    const safeId = /^[A-Za-z0-9_-]{3,64}$/.test(rawId)
+      ? rawId
+      : 'UC-' + Math.floor(26100 + Math.random() * 8000);
+
+    const safeBooking = {
+      ...newBooking,
+      id: safeId,
+      orderId: safeId,
+      customerName: String(newBooking.customerName || newBooking.name || 'Customer').slice(0, 100),
+      phone: String(newBooking.phone || '').slice(0, 20),
+      createdAt: newBooking.createdAt || new Date().toISOString(),
+    };
+
     const content = fs.readFileSync(DATA_FILE, 'utf-8');
     const bookings = JSON.parse(content || '[]');
 
     // Check if duplicate by ID
-    const existingIndex = bookings.findIndex((b: { id?: string }) => b.id === newBooking.id);
+    const existingIndex = bookings.findIndex((b: { id?: string }) => b.id === safeBooking.id);
     if (existingIndex >= 0) {
-      bookings[existingIndex] = { ...bookings[existingIndex], ...newBooking };
+      bookings[existingIndex] = { ...bookings[existingIndex], ...safeBooking };
     } else {
-      bookings.unshift({
-        ...newBooking,
-        createdAt: newBooking.createdAt || new Date().toISOString(),
-      });
+      bookings.unshift(safeBooking);
     }
 
     fs.writeFileSync(DATA_FILE, JSON.stringify(bookings.slice(0, 500), null, 2), 'utf-8');
-    return NextResponse.json({ success: true, booking: newBooking });
+    return NextResponse.json({ success: true, booking: safeBooking });
   } catch (error) {
     console.error('Failed to save booking:', error);
     return NextResponse.json(
@@ -133,12 +150,17 @@ export async function PATCH(req: Request) {
     ensureDataFile();
     const { id, status } = await req.json();
 
+    if (!id || !/^[A-Za-z0-9_-]{1,64}$/.test(String(id)) || !status || typeof status !== 'string') {
+      return NextResponse.json({ success: false, message: 'Invalid update parameters' }, { status: 400 });
+    }
+
+    const safeStatus = String(status).slice(0, 50);
     const content = fs.readFileSync(DATA_FILE, 'utf-8');
     const bookings = JSON.parse(content || '[]');
 
     const order = bookings.find((b: { id?: string; orderId?: string }) => b.id === id || b.orderId === id);
     if (order) {
-      order.status = status;
+      order.status = safeStatus;
       fs.writeFileSync(DATA_FILE, JSON.stringify(bookings, null, 2), 'utf-8');
       return NextResponse.json({ success: true, booking: order });
     }
@@ -157,22 +179,16 @@ export async function DELETE(req: Request) {
     ensureDataFile();
     const url = new URL(req.url);
     const id = url.searchParams.get('id');
-    const clearAll = url.searchParams.get('clearAll');
 
-    if (clearAll === 'true') {
-      fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf-8');
-      return NextResponse.json({ success: true, message: 'All bookings cleared' });
+    if (!id || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+      return NextResponse.json({ success: false, message: 'Invalid or missing booking id' }, { status: 400 });
     }
 
-    if (id) {
-      const content = fs.readFileSync(DATA_FILE, 'utf-8');
-      let bookings = JSON.parse(content || '[]');
-      bookings = bookings.filter((b: { id?: string; orderId?: string }) => b.id !== id && b.orderId !== id);
-      fs.writeFileSync(DATA_FILE, JSON.stringify(bookings, null, 2), 'utf-8');
-      return NextResponse.json({ success: true, message: 'Booking deleted' });
-    }
-
-    return NextResponse.json({ success: false, message: 'Missing id or clearAll parameter' }, { status: 400 });
+    const content = fs.readFileSync(DATA_FILE, 'utf-8');
+    let bookings = JSON.parse(content || '[]');
+    bookings = bookings.filter((b: { id?: string; orderId?: string }) => b.id !== id && b.orderId !== id);
+    fs.writeFileSync(DATA_FILE, JSON.stringify(bookings, null, 2), 'utf-8');
+    return NextResponse.json({ success: true, message: 'Booking deleted' });
   } catch (error) {
     return NextResponse.json(
       { success: false, message: (error as Error).message },
@@ -180,4 +196,3 @@ export async function DELETE(req: Request) {
     );
   }
 }
-

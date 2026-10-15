@@ -3,16 +3,14 @@
 import React, { useState } from 'react';
 import { CompactHero } from '@/components/CompactHero';
 import { PromoTicker } from '@/components/PromoTicker';
+import { CoreLaundrySection } from '@/components/CoreLaundrySection';
 import { ChooseServiceHorizontal } from '@/components/ChooseServiceHorizontal';
 import { RateCardListSection } from '@/components/RateCardListSection';
 import { HomeCareSection } from '@/components/HomeCareSection';
-import { CoreLaundrySection } from '@/components/CoreLaundrySection';
 import { MembershipCards } from '@/components/MembershipCards';
 import { FooterStore } from '@/components/FooterStore';
 import { CrmPortal } from '@/components/CrmPortal';
 import { useRouter } from 'next/navigation';
-
-
 
 export default function Home() {
   const router = useRouter();
@@ -54,7 +52,7 @@ export default function Home() {
           }
         }}
         onExplore={() => {
-          const el = document.getElementById('choose-service-section');
+          const el = document.getElementById('core-services-section');
           if (el) el.scrollIntoView({ behavior: 'smooth' });
         }}
       />
@@ -62,7 +60,13 @@ export default function Home() {
       {/* Promo Ticker */}
       <PromoTicker />
 
-      {/* 2. Choose The Service You Need - Horizontal 1:1 Professional Cards */}
+      {/* 2. Core Everyday Care & Service Grid (Matches Reference Photo 2, placed directly below Hero) */}
+      <CoreLaundrySection
+        onSelectService={(srv, garment) => handleOpenOrderForm(srv, garment)}
+        onCheckGarmentPrice={handleScrollToRateCard}
+      />
+
+      {/* 3. Choose The Service You Need - Horizontal 1:1 Professional Cards (Moved below Core Services) */}
       <ChooseServiceHorizontal
         onSelectService={(srv, garment) => handleOpenOrderForm(srv, garment)}
         onCheckGarmentPrice={handleScrollToRateCard}
@@ -71,24 +75,20 @@ export default function Home() {
         }}
       />
 
-      {/* 3. Third Section: Clean Rate Card List with Prominent ORDER NOW Button (Matching Screenshot 3) */}
+      {/* 4. Third Section: Clean Rate Card List with Prominent ORDER NOW Button */}
       <RateCardListSection
         onOrderNow={(srv, item) => handleOpenOrderForm(srv, item)}
         searchFilter={searchQuery}
       />
 
-      {/* 4. Fourth Section: Sofa & Curtain (Parda) Cleaning (Matching Screenshot 4) */}
+      {/* 5. Fourth Section: Sofa & Curtain (Parda) Cleaning */}
       <HomeCareSection onOpenBooking={() => handleOpenOrderForm('Home Upholstery Care', 'Sofa & Curtain Deep Shampooing')} />
-
-      {/* 5. Core Everyday Laundry Rates */}
-      <CoreLaundrySection onOpenBooking={() => handleOpenOrderForm('Wash & Fold — ₹109/kg')} />
 
       {/* 6. VIP Membership Cards (Silver, Gold, Platinum In-Card Poster Styles) */}
       <MembershipCards onClaimMembership={handleClaimMembership} />
 
       {/* 7. Store Location & Contact Footer */}
       <FooterStore />
-
 
     </main>
   );
