@@ -21,19 +21,50 @@ export function formatWhatsAppNumber(phone: string): string {
   return digits;
 }
 
+const WHATSAPP_API_URL =
+  process.env.WHATSAPP_API_URL ||
+  process.env.NEXT_PUBLIC_WHATSAPP_API_URL ||
+  'https://evo.infispark.in/message/sendText/uclean';
+
+const WHATSAPP_API_KEY =
+  process.env.WHATSAPP_API_KEY ||
+  process.env.NEXT_PUBLIC_WHATSAPP_API_KEY ||
+  'vR39h6avY69g7kAU3YQbS6V6XEvudson';
+
 /**
- * Triggers WhatsApp message via our internal API route
+ * Sends a WhatsApp message directly via Evolution API from client side
  */
 export async function sendWhatsAppMessage(number: string, text: string): Promise<WhatsAppResponse> {
   try {
     const formatted = formatWhatsAppNumber(number);
-    const res = await fetch('/api/whatsapp/send', {
+    if (!formatted || formatted.length < 10) {
+      return { success: false, message: 'Invalid phone number format' };
+    }
+
+    const res = await fetch(WHATSAPP_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ number: formatted, text }),
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: WHATSAPP_API_KEY,
+      },
+      body: JSON.stringify({
+        number: formatted,
+        text,
+        delay: 0,
+        linkPreview: false,
+        mentionsEveryOne: false,
+      }),
     });
-    const data = await res.json();
-    return data;
+
+    const data = await res.json().catch(() => null);
+    if (res.ok) {
+      return { success: true, message: 'WhatsApp message sent successfully', data };
+    }
+    return {
+      success: false,
+      message: data?.message || `WhatsApp gateway error (${res.status})`,
+      data,
+    };
   } catch (error) {
     console.error('Failed to trigger sendWhatsAppMessage:', error);
     return { success: false, message: (error as Error).message };

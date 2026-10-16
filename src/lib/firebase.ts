@@ -106,15 +106,8 @@ export async function createBooking(
       console.warn('RTDB remote sync warning, persisting locally:', rtdbErr);
     }
 
-    // 2. Also persist locally and sync to server backup
+    // 2. Also persist locally in browser storage
     saveLocalBooking(bookingData);
-    if (typeof window !== 'undefined') {
-      fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bookingData),
-      }).catch(() => {});
-    }
 
     // 3. Automated WhatsApp welcome confirmation to customer
     if (payload.phone) {
@@ -130,8 +123,10 @@ export async function createBooking(
         console.warn('Customer WhatsApp send error:', err)
       );
 
-      // Alert store manager
-      const storePhone = process.env.NEXT_PUBLIC_STORE_NOTIFY_PHONE || '917400474132';
+      const storePhone =
+        process.env.STORE_NOTIFY_PHONE ||
+        process.env.NEXT_PUBLIC_STORE_NOTIFY_PHONE ||
+        '918369298947';
       const storeMsg = generateStoreAlertMessage({
         customerName: payload.customerName,
         phone: payload.phone,

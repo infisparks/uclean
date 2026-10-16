@@ -315,74 +315,44 @@ export function CrmPortal({
     setIsSidebarOpen(false);
   };
 
-  // Sync bookings from API & Firebase RTDB
+  // Real-time synchronization directly with Firebase Realtime Database and browser cache
   useEffect(() => {
     let isMounted = true;
 
-    // Clean any old demo data keys from localStorage
+    // 1. Initial hydration from local storage if available
     try {
       localStorage.removeItem('uclean_demo_orders');
+      const localCached = JSON.parse(localStorage.getItem('uclean_local_bookings') || '[]');
+      if (Array.isArray(localCached) && localCached.length > 0 && isMounted) {
+        const mappedLocal: CrmOrder[] = localCached.map((b: any) => {
+          const rawTime = b.createdAt || b.timestamp;
+          return {
+            id: b.id || b.orderId || `UC-${Math.floor(26100 + Math.random() * 8000)}`,
+            name: b.customerName || b.name || 'Customer',
+            phone: b.phone || '',
+            service: String(b.serviceType || b.service || 'Laundry Service'),
+            qty: b.quantity || b.qty || 'Standard Package',
+            total: b.totalEstimate ? String(b.totalEstimate) : (b.total ? String(b.total) : 'To confirm'),
+            address: b.address || 'Nerul West',
+            slot: b.slot || `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Standard Slot'}`,
+            date: b.preferredDate || b.date || 'Today',
+            time: b.preferredTimeSlot || b.time || 'Standard Slot',
+            status: b.status ? capitalizeStatus(b.status) : 'New Request',
+            notes: typeof b.notes === 'string' ? b.notes : '',
+            items: typeof b.items === 'string' ? b.items : '',
+            createdAt: rawTime || new Date().toISOString(),
+            timestamp: rawTime || new Date().toISOString(),
+            callDone: b.status !== 'new' && b.status !== 'New Request',
+            pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(b.status),
+          };
+        });
+        setOrders((prev) => mergeOrdersList(prev, mappedLocal));
+      }
     } catch {
       // ignore
     }
 
-    const fetchServerBookings = async () => {
-      try {
-        const res = await fetch('/api/bookings');
-        const json = await res.json();
-        if (json.success && Array.isArray(json.bookings)) {
-          const mapped: CrmOrder[] = json.bookings.map((b: any) => {
-            const rawTime = b.createdAt || b.timestamp;
-            return {
-              id: b.id || b.orderId || `UC-${Math.floor(26100 + Math.random() * 8000)}`,
-              name: b.customerName || b.name || 'Customer',
-              phone: b.phone || '',
-              service: String(b.serviceType || b.service || 'Laundry Service'),
-              qty: b.quantity || b.qty || 'Standard Package',
-              total: b.totalEstimate ? String(b.totalEstimate) : (b.total ? String(b.total) : 'To confirm'),
-              address: b.address || 'Nerul West',
-              slot: b.slot || `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Standard Slot'}`,
-              date: b.preferredDate || b.date || 'Today',
-              time: b.preferredTimeSlot || b.time || 'Standard Slot',
-              status: b.status ? capitalizeStatus(b.status) : 'New Request',
-              notes: typeof b.notes === 'string' ? b.notes : '',
-              items: typeof b.items === 'string' ? b.items : '',
-              createdAt: rawTime || new Date().toISOString(),
-              timestamp: rawTime || new Date().toISOString(),
-              callDone: b.status !== 'new' && b.status !== 'New Request',
-              pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(b.status),
-            };
-          });
-
-          if (isMounted) {
-            setOrders((prev) => {
-              const merged = mergeOrdersList(prev, mapped);
-              // Sound chime if new booking arrives live
-              if (previousOrderCount.current > 0 && merged.length > previousOrderCount.current && soundEnabled) {
-                playNewOrderSound();
-                showToast('🔔 New Customer Booking Received!', 'success');
-              }
-              previousOrderCount.current = merged.length;
-              return merged;
-            });
-
-            // Keep selected order updated
-            setSelectedOrder((prev) => {
-              if (!prev) return null;
-              return mapped.find((m) => m.id === prev.id) || prev;
-            });
-          }
-        }
-      } catch (err) {
-        console.warn('API sync warning:', err);
-      }
-    };
-
-    fetchServerBookings();
-
-    const intervalId = setInterval(fetchServerBookings, 4000);
-
-    // Firebase RTDB Live Listener
+    // 2. Firebase RTDB Live Listener (Client-side real-time sync)
     let unsubscribeRtdb = () => {};
     try {
       const bookingsRef = ref(rtdb, 'bookings');
@@ -418,7 +388,20 @@ export function CrmPortal({
               .reverse();
 
             if (isMounted && rtdbList.length > 0) {
-              setOrders((prev) => mergeOrdersList(prev, rtdbList));
+              setOrders((prev) => {
+                const merged = mergeOrdersList(prev, rtdbList);
+                if (previousOrderCount.current > 0 && merged.length > previousOrderCount.current && soundEnabled) {
+                  playNewOrderSound();
+                  showToast('🔔 New Customer Booking Received!', 'success');
+                }
+                previousOrderCount.current = merged.length;
+                return merged;
+              });
+
+              setSelectedOrder((prev) => {
+                if (!prev) return null;
+                return rtdbList.find((m) => m.id === prev.id) || prev;
+              });
             }
           }
         },
@@ -430,7 +413,6 @@ export function CrmPortal({
 
     return () => {
       isMounted = false;
-      clearInterval(intervalId);
       unsubscribeRtdb();
     };
   }, [soundEnabled]);
@@ -650,12 +632,6 @@ export function CrmPortal({
     }
 
     try {
-      fetch('/api/bookings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: targetId, status: newStatus }),
-      }).catch(() => {});
-
       update(ref(rtdb, `bookings/${targetId}`), {
         status: newStatus,
       }).catch(() => {});
@@ -681,12 +657,6 @@ export function CrmPortal({
       );
     }
 
-    fetch('/api/bookings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: targetOrder.id, status: 'Call Confirmed' }),
-    }).catch(() => {});
-
     update(ref(rtdb, `bookings/${targetOrder.id}`), {
       status: 'Call Confirmed',
     }).catch(() => {});
@@ -708,12 +678,6 @@ export function CrmPortal({
         prev ? { ...prev, callDone: true, status: 'Pickup Assigned' } : null
       );
     }
-
-    fetch('/api/bookings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: targetOrder.id, status: 'Pickup Assigned' }),
-    }).catch(() => {});
 
     update(ref(rtdb, `bookings/${targetOrder.id}`), {
       status: 'Pickup Assigned',
@@ -754,12 +718,6 @@ export function CrmPortal({
       );
     }
 
-    fetch('/api/bookings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: targetOrder.id, status: 'Picked Up' }),
-    }).catch(() => {});
-
     update(ref(rtdb, `bookings/${targetOrder.id}`), {
       status: 'Picked Up',
     }).catch(() => {});
@@ -785,7 +743,6 @@ export function CrmPortal({
     }
 
     try {
-      await fetch(`/api/bookings?id=${orderId}`, { method: 'DELETE' });
       set(ref(rtdb, `bookings/${orderId}`), null).catch(() => {});
     } catch {
       // Local
@@ -1044,12 +1001,6 @@ export function CrmPortal({
     setNewCustPhone('');
     setNewCustAddress('');
     setNewCustNotes('');
-
-    fetch('/api/bookings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newOrd),
-    }).catch(() => {});
 
     try {
       set(ref(rtdb, `bookings/${newId}`), newOrd).catch(() => {});
