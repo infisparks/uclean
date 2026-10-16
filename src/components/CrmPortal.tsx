@@ -364,6 +364,11 @@ export function CrmPortal({
   const [editNotes, setEditNotes] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Delete confirmation modal state (requires user to type "delete")
+  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const handleOpenEditOrder = (ord: CrmOrder) => {
     const currentServices = ord.services && ord.services.length > 0 ? [...ord.services] : [ord.service];
     setEditServices(currentServices);
@@ -942,11 +947,23 @@ export function CrmPortal({
     showToast(`Order #${targetOrder.id} moved to Cleaning / Wash!`, 'info');
   };
 
-  // Delete single order permanently from database and cache
-  const handleDeleteOrder = async (orderId: string) => {
+  // Open delete confirmation modal (prompts user to type "delete")
+  const handleDeleteOrder = (orderId: string) => {
+    setOrderToDelete(orderId);
+    setDeleteConfirmInput('');
+  };
+
+  // Perform permanent deletion once user types "delete"
+  const handleConfirmDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    if (deleteConfirmInput.trim().toLowerCase() !== 'delete') {
+      showToast('Please type "delete" to confirm.', 'error');
+      return;
+    }
+
+    const orderId = orderToDelete;
     const cleanId = orderId.replace(/^#/, '');
-    const sure = window.confirm(`Permanently remove Order #${cleanId} from CRM database?\n\nThis will completely erase the order and cannot be undone.`);
-    if (!sure) return;
+    setIsDeleting(true);
 
     // 1. Immediately remove from React state & close drawer if selected
     setOrders((prev) => prev.filter((o) => o.id !== orderId && o.id !== cleanId));
@@ -954,6 +971,8 @@ export function CrmPortal({
       setIsSidebarOpen(false);
       setSelectedOrder(null);
     }
+    setOrderToDelete(null);
+    setDeleteConfirmInput('');
 
     // 2. Perform deep deletion across local storage & Firebase Realtime Database
     try {
@@ -962,6 +981,8 @@ export function CrmPortal({
     } catch (e) {
       console.error('Delete order error:', e);
       showToast(`Order #${cleanId} removed`, 'info');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -3476,7 +3497,111 @@ export function CrmPortal({
       )}
 
       {/* ========================================================================= */}
-      {/* 7. TOAST NOTIFICATIONS */}
+      {/* 7. DELETE CONFIRMATION MODAL (Type 'delete' to confirm)                   */}
+      {/* ========================================================================= */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => !isDeleting && setOrderToDelete(null)}
+          />
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col z-10 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 px-5 border-b border-rose-100 flex items-center justify-between bg-rose-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shadow-xs shrink-0">
+                  <Trash2 className="w-4 h-4 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-rose-950">
+                    Delete Order Permanently
+                  </h3>
+                  <p className="text-[11px] text-rose-700/80 font-medium">
+                    Order #{orderToDelete.replace(/^#/, '')}
+                    {(() => {
+                      const found = orders.find((o) => o.id === orderToDelete || o.id === orderToDelete.replace(/^#/, ''));
+                      return found?.name ? ` • ${found.name}` : '';
+                    })()}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrderToDelete(null)}
+                disabled={isDeleting}
+                className="w-8 h-8 rounded-full hover:bg-rose-100/80 text-rose-500 hover:text-rose-900 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (deleteConfirmInput.trim().toLowerCase() === 'delete') {
+                  handleConfirmDeleteOrder();
+                }
+              }}
+              className="p-5 space-y-4 text-xs"
+            >
+              <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-200/60 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <p className="text-[11.5px] text-rose-900 leading-relaxed">
+                  This action is irreversible. The booking will be permanently wiped from both the cloud database and your local CRM cache.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-bold text-slate-700 mb-1.5">
+                  Type <span className="text-rose-600 uppercase font-black tracking-wide">delete</span> to confirm:
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  required
+                  value={deleteConfirmInput}
+                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                  placeholder='Type "delete"'
+                  className="w-full h-10 px-3.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 transition"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setOrderToDelete(null)}
+                  disabled={isDeleting}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleteConfirmInput.trim().toLowerCase() !== 'delete' || isDeleting}
+                  className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Permanently Delete</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 8. TOAST NOTIFICATIONS */}
       {/* ========================================================================= */}
       {toastMsg && (
         <div
