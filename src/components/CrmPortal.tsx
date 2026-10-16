@@ -352,6 +352,8 @@ export function CrmPortal({
   const [newCustNameError, setNewCustNameError] = useState('');
   const [newCustPhoneError, setNewCustPhoneError] = useState('');
   const [newCustAddressError, setNewCustAddressError] = useState('');
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Edit order details & services state
   const [isEditingOrder, setIsEditingOrder] = useState(false);
