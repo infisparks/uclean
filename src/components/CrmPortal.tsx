@@ -482,6 +482,11 @@ export function CrmPortal({
   // Real-time synchronization directly with Firebase Realtime Database and browser cache
   useEffect(() => {
     let isMounted = true;
+    setIsLoadingData(true);
+
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setIsLoadingData(false);
+    }, 2500);
 
     // 1. Initial hydration from local storage if available
     try {
@@ -536,6 +541,7 @@ export function CrmPortal({
       unsubscribeRtdb = onValue(
         bookingsRef,
         (snapshot) => {
+          if (isMounted) setIsLoadingData(false);
           const deletedIds = getDeletedOrderIds();
           if (snapshot.exists()) {
             const val = snapshot.val();
@@ -605,14 +611,19 @@ export function CrmPortal({
             }
           }
         },
-        (err) => console.warn('RTDB listen warning:', err)
+        (err) => {
+          console.warn('RTDB listen warning:', err);
+          if (isMounted) setIsLoadingData(false);
+        }
       );
     } catch (e) {
       console.warn('RTDB setup notice:', e);
+      if (isMounted) setIsLoadingData(false);
     }
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
       unsubscribeRtdb();
     };
   }, [soundEnabled]);
@@ -1150,7 +1161,7 @@ export function CrmPortal({
   };
 
   // Manual New Order Creator
-  const handleCreateNewOrder = (e: React.FormEvent) => {
+  const handleCreateNewOrder = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const nameVal = validateCustomerName(newCustName);
@@ -1196,21 +1207,23 @@ export function CrmPortal({
       pickupDone: false,
     };
 
+    setCreatingOrder(true);
+    try {
+      await set(ref(rtdb, `bookings/${newId}`), newOrd);
+    } catch {
+      // Local fallback
+    } finally {
+      setCreatingOrder(false);
+      setNewOrderModalOpen(false);
+      setNewCustName('');
+      setNewCustPhone('');
+      setNewCustAddress('');
+      setNewCustNotes('');
+    }
+
     setOrders([newOrd, ...orders]);
     setSelectedOrder(newOrd);
     setIsSidebarOpen(true);
-    setNewOrderModalOpen(false);
-    setNewCustName('');
-    setNewCustPhone('');
-    setNewCustAddress('');
-    setNewCustNotes('');
-
-    try {
-      set(ref(rtdb, `bookings/${newId}`), newOrd).catch(() => {});
-    } catch {
-      // Local fallback
-    }
-
     showToast(`Order #${newId} logged successfully!`, 'success');
   };
 
@@ -2379,7 +2392,50 @@ export function CrmPortal({
         {/* ORDERS DISPLAY: FULL-WIDTH TABLE / CARDS VIEW */}
         {/* ======================================================================= */}
         <div className="w-full space-y-4">
-            {filteredOrders.length === 0 ? (
+          {isLoadingData ? (
+            /* Live Data Loading Skeleton Effect (Follows Global UI Rules: clean minimal layout, soft gray, purple accent) */
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+              {/* Header Status Strip */}
+              <div className="p-3.5 px-5 bg-gradient-to-r from-purple-50/80 via-slate-50 to-purple-50/80 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="relative flex items-center justify-center">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-ping absolute opacity-75" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-600 relative" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-800">
+                    Loading live bookings from database...
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-purple-700 font-bold bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Syncing Live Data</span>
+                </div>
+              </div>
+
+              {/* Shimmering Skeleton Table Rows */}
+              <div className="divide-y divide-slate-100 animate-pulse">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="p-4 px-5 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-slate-200/90 shrink-0" />
+                      <div className="space-y-1.5">
+                        <div className="h-4 w-32 sm:w-44 bg-slate-200 rounded" />
+                        <div className="h-2.5 w-24 bg-slate-100 rounded" />
+                      </div>
+                    </div>
+                    <div className="hidden sm:block h-3.5 w-28 bg-slate-100 rounded" />
+                    <div className="hidden md:block h-6 w-36 bg-slate-100 rounded-lg" />
+                    <div className="h-3.5 w-16 bg-slate-200/80 rounded" />
+                    <div className="h-5 w-24 bg-slate-100 rounded-full" />
+                    <div className="hidden lg:flex gap-1.5">
+                      <div className="h-7 w-16 bg-slate-100 rounded-lg" />
+                      <div className="h-7 w-7 bg-slate-100 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : filteredOrders.length === 0 ? (
               /* Empty State */
               <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs space-y-4 max-w-lg mx-auto mt-6">
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto border border-slate-200 shadow-inner">
@@ -3178,10 +3234,20 @@ export function CrmPortal({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 active:scale-98 transition-colors cursor-pointer"
+                  disabled={creatingOrder}
+                  className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 active:scale-98 transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>Create Booking</span>
+                  {creatingOrder ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Creating Booking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Create Booking</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

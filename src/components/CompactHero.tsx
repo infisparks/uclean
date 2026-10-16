@@ -34,8 +34,8 @@ export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
         </div>
       </div>
 
-      {/* Subtle top daylight gradient - ONLY covers the top text area (height 180px), leaving clothes 100% crisp and unblurred */}
-      <div className="absolute inset-x-0 top-0 h-[180px] bg-gradient-to-b from-white/85 via-white/35 to-transparent pointer-events-none z-10" />
+      {/* Subtle top daylight gradient - covers the top text area, leaving clothes crisp and unblurred */}
+      <div className="absolute inset-x-0 top-0 h-[195px] bg-gradient-to-b from-white/90 via-white/40 to-transparent pointer-events-none z-10" />
 
       {/* TOP: Pure Brand Header, Tag, Headline & Description */}
       <div className="relative z-10 flex flex-col items-center text-center px-3 pt-1.5 sm:pt-2 pb-2">
@@ -62,11 +62,11 @@ export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
           </span>
         </div>
 
-        {/* 3. MAIN HEADLINE */}
+        {/* 3. MAIN HEADLINE - Slightly increased for bolder presence */}
         <h1 className="font-heading flex flex-col items-center select-none text-center">
           {/* Line 1 */}
           <span
-            className="text-[20px] sm:text-[24px] md:text-[27px] font-black tracking-tight leading-[1.12] text-[#042817]"
+            className="text-[23px] sm:text-[27px] md:text-[31px] font-black tracking-tight leading-[1.12] text-[#042817]"
             style={{
               WebkitTextStroke: '1px #ffffff',
               paintOrder: 'stroke fill',
@@ -79,7 +79,7 @@ export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
 
           {/* Line 2 */}
           <span
-            className="relative inline-block text-[22px] sm:text-[26px] md:text-[29px] font-black tracking-tight leading-[1.12] text-[#008f51] mt-0.5"
+            className="relative inline-block text-[25px] sm:text-[29px] md:text-[33px] font-black tracking-tight leading-[1.12] text-[#008f51] mt-0.5"
             style={{
               WebkitTextStroke: '1px #ffffff',
               paintOrder: 'stroke fill',
@@ -91,15 +91,12 @@ export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
           </span>
         </h1>
 
-        {/* 4. Description (compact 2-line layout that sits cleanly above the clothing rack) */}
-        <p
-          className="mt-1.5 sm:mt-2 max-w-[370px] sm:max-w-[420px] text-[11px] sm:text-[11.5px] font-medium text-[#0c2b1e] leading-snug text-center px-2 select-none"
-          style={{
-            textShadow: '0 1px 2px rgba(255,255,255,0.95)',
-          }}
-        >
-          Get everyday laundry washed and folded, clothes washed and ironed, or eligible garments dry-cleaned&mdash;without travelling to the store.
-        </p>
+        {/* 4. Highlighted Description (Preserves 11px font size, highlighted with frosted backdrop & emerald accents) */}
+        <div className="mt-2 max-w-[380px] sm:max-w-[440px] px-3.5 py-1.5 rounded-2xl bg-white/92 backdrop-blur-md border border-[#008f51]/30 shadow-xs select-none">
+          <p className="text-[11px] sm:text-[11.5px] font-semibold text-[#0c2b1e] leading-snug text-center">
+            Get everyday laundry <span className="text-[#008f51] font-bold">washed &amp; folded</span>, clothes <span className="text-[#008f51] font-bold">washed &amp; ironed</span>, or eligible garments <span className="text-[#008f51] font-bold">dry-cleaned</span>&mdash;without travelling to the store.
+          </p>
+        </div>
       </div>
     </header>
   );

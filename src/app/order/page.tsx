@@ -82,6 +82,50 @@ function OrderFormContent() {
   const [phoneError, setPhoneError] = useState('');
   const [addressError, setAddressError] = useState('');
 
+  // Storage key for remembering customer contact & address details (only name, phone, flat/building, pin code, and address)
+  const CUSTOMER_PROFILE_KEY = 'uclean_customer_profile';
+  const [isStorageLoaded, setIsStorageLoaded] = useState(false);
+
+  // 1. Auto-fill from localStorage on initial mount (only name, phone, flat/building, pin code, and address)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOMER_PROFILE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (typeof data.name === 'string' && data.name) setName(data.name);
+        if (typeof data.phone === 'string' && data.phone) setPhone(data.phone);
+        if (typeof data.building === 'string' && data.building) setBuilding(data.building);
+        if (typeof data.pin === 'string' && data.pin) setPin(data.pin);
+        if (typeof data.address === 'string' && data.address) setAddress(data.address);
+      }
+    } catch (err) {
+      console.warn('Could not load customer profile from localStorage:', err);
+    } finally {
+      setIsStorageLoaded(true);
+    }
+  }, []);
+
+  // 2. Whenever user enters or edits name, phone, flat/building, pin, or address, update localStorage
+  useEffect(() => {
+    if (!isStorageLoaded) return;
+    if (name || phone || building || address || (pin && pin !== '400706')) {
+      try {
+        localStorage.setItem(
+          CUSTOMER_PROFILE_KEY,
+          JSON.stringify({
+            name,
+            phone,
+            building,
+            pin,
+            address,
+          })
+        );
+      } catch (err) {
+        console.warn('Could not save customer profile to localStorage:', err);
+      }
+    }
+  }, [isStorageLoaded, name, phone, building, pin, address]);
+
   // Selected services are always positioned at Card 1 (top of the grid) so users can see them,
   // view their prices, unselect them, or select other services seamlessly!
   const filteredAvailableServices = React.useMemo(() => {
@@ -231,6 +275,22 @@ function OrderFormContent() {
       });
 
       if (res.success) {
+        // Save / update the customer's latest profile in localStorage
+        try {
+          localStorage.setItem(
+            CUSTOMER_PROFILE_KEY,
+            JSON.stringify({
+              name: nameVal.formatted || name.trim(),
+              phone: phoneVal.formatted || phone.trim(),
+              building: building.trim(),
+              pin: pin.trim() || '400706',
+              address: addressVal.formatted || address.trim(),
+            })
+          );
+        } catch (e) {
+          console.warn('Failed to update localStorage profile on submit:', e);
+        }
+
         setBookingId(res.id);
         confetti({
           particleCount: 110,
