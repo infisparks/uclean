@@ -187,12 +187,12 @@ export function AllServicesModal({
                         : 'bg-white border-[#E5E7EB] hover:border-[#008f51]/60 hover:bg-[#FAF6EE]/50'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                      <span className="text-xl shrink-0 p-1 bg-[#FAF6EE] rounded-lg border border-[#DECBB0]/50">
+                    <div className="flex items-start gap-2.5 min-w-0 pr-2 flex-1">
+                      <span className="text-xl shrink-0 p-1 bg-[#FAF6EE] rounded-lg border border-[#DECBB0]/50 mt-0.5">
                         {srv.icon}
                       </span>
-                      <div className="min-w-0">
-                        <span className="block text-xs font-semibold text-[#111827] truncate leading-tight">
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-xs font-semibold text-[#111827] leading-snug break-words">
                           {srv.name}
                         </span>
                         <div className="flex items-center gap-1.5 mt-0.5">

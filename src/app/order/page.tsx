@@ -475,26 +475,26 @@ function OrderFormContent() {
                         <label
                           key={srv.id}
                           onClick={() => toggleService(srv.id)}
-                          className={`relative flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          className={`relative flex items-start justify-between p-2 sm:p-2.5 rounded-xl border cursor-pointer transition-all select-none min-h-[62px] sm:min-h-[66px] ${
                             isChecked
                               ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-2 ring-[#008f51] shadow-xs'
                               : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
                           }`}
                         >
-                          <div className="min-w-0 pr-1 flex items-center gap-1.5">
-                            <span className="text-base shrink-0">{srv.icon}</span>
-                            <div className="min-w-0">
-                              <span className="block text-[11.5px] sm:text-[12.5px] font-bold text-[#072618] truncate leading-tight">
+                          <div className="min-w-0 pr-1 flex items-start gap-1.5 sm:gap-2 flex-1">
+                            <span className="text-base sm:text-lg shrink-0 mt-0.5 leading-none">{srv.icon}</span>
+                            <div className="min-w-0 flex-1">
+                              <span className="block text-[11px] sm:text-[12px] font-bold text-[#072618] leading-[1.25] break-words">
                                 {srv.name}
                               </span>
-                              <span className="text-[10px] font-bold text-[#00874c]">
+                              <span className="block text-[9.5px] sm:text-[10.5px] font-extrabold text-[#00874c] mt-0.5 leading-tight">
                                 {srv.rate}
                               </span>
                             </div>
                           </div>
 
                           <div
-                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border mt-0.5 ml-1 transition-all ${
                               isChecked
                                 ? 'bg-gradient-to-br from-[#008f51] to-[#05a862] border-[#008f51] text-white shadow-xs'
                                 : 'bg-white border-[#DECBB0]'
