@@ -43,6 +43,17 @@ h1, h2, h3, h4, .font-heading {
   letter-spacing: -0.02em;
 }
 
+/* Admin Panel & CRM Poppins Font System */
+.admin-poppins,
+.admin-poppins *,
+.admin-poppins input,
+.admin-poppins button,
+.admin-poppins select,
+.admin-poppins textarea,
+.admin-poppins .font-heading {
+  font-family: var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
 /* Outer desktop wrapper with glowing shadow */
 .app-container {
   width: 100%;

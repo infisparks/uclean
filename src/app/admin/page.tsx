@@ -17,7 +17,7 @@ export default function AdminPage() {
 
   if (loading || !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#F5F6F8] flex flex-col items-center justify-center p-4 font-sans text-[#111827]">
+      <div className="min-h-screen bg-[#F5F6F8] flex flex-col items-center justify-center p-4 admin-poppins text-[#111827]">
         <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3" />
         <p className="text-sm font-medium text-[#6B7280]">Verifying admin authorization...</p>
       </div>

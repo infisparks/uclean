@@ -1970,7 +1970,7 @@ export function CrmPortal({
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col admin-poppins antialiased selection:bg-blue-100 selection:text-blue-900">
       {/* 1. TOP EXECUTIVE CRM CONTROL BAR */}
       <header className="bg-white border-b border-slate-200/90 sticky top-0 z-20 shadow-xs">
         <div className="w-full max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">

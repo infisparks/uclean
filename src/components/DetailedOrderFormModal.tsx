@@ -169,7 +169,7 @@ export function DetailedOrderFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 admin-poppins">
       <div className="relative w-full max-w-xl bg-white rounded-3xl overflow-hidden shadow-2xl border-2 border-[#DECBB0] max-h-[94vh] flex flex-col">
         
         {/* Top Header Banner */}

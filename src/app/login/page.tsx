@@ -54,7 +54,7 @@ export default function LoginPage() {
   // While checking existing session, show minimal loading state
   if (authLoading || isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#F5F6F8] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F5F6F8] flex flex-col items-center justify-center p-4 admin-poppins">
         <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3" />
         <p className="text-sm font-medium text-[#6B7280]">Checking admin session...</p>
       </div>
@@ -62,7 +62,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F6F8] flex flex-col justify-center items-center p-4 sm:p-6 font-sans antialiased text-[#111827]">
+    <div className="min-h-screen bg-[#F5F6F8] flex flex-col justify-center items-center p-4 sm:p-6 admin-poppins antialiased text-[#111827]">
       
       {/* Container Card */}
       <div className="w-full max-w-[420px]">

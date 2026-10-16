@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
+import { Inter, Plus_Jakarta_Sans, Poppins } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({
@@ -14,6 +14,13 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   variable: '--font-jakarta',
+  display: 'swap',
+});
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800'],
+  variable: '--font-poppins',
   display: 'swap',
 });
 
@@ -64,7 +71,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${plusJakartaSans.variable} ${poppins.variable}`} suppressHydrationWarning>
       <body className="antialiased bg-[#FAF6EE] text-[#0c2b1e] min-h-screen w-full" suppressHydrationWarning>
         {/* Meta Pixel Code */}
         <Script id="meta-pixel" strategy="afterInteractive">
