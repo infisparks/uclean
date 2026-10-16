@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 
 interface CompactHeroProps {
   onSearch?: (query: string) => void;
@@ -10,25 +11,41 @@ interface CompactHeroProps {
 export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
   return (
     <header
-      className="relative w-full aspect-square bg-cover bg-no-repeat px-3 pt-2 sm:pt-3 pb-3 flex flex-col justify-start overflow-hidden border-b border-[#008f51]/30 shadow-2xl"
-      style={{
-        backgroundImage: "url('/images/hero-clean-bg.jpg')",
-        backgroundPosition: 'center 42%',
-      }}
+      className="relative w-full min-h-[430px] sm:min-h-[460px] flex flex-col justify-start overflow-hidden border-b border-[#008f51]/30 shadow-2xl"
       id="hero"
     >
-      {/* Subtle top daylight gradient to ensure text readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-transparent pointer-events-none" />
+      {/* High-Definition Hero Background (Native Resolution & Crisp Clarity) */}
+      <Image
+        src="/images/hero-clean-bg.jpg"
+        alt="Professional Laundry & Dry Cleaning"
+        fill
+        priority
+        unoptimized
+        sizes="(max-width: 480px) 100vw, 480px"
+        className="object-cover object-top select-none pointer-events-none"
+      />
 
-      {/* TOP: Pure Brand Header & Headline */}
-      <div className="relative z-10 flex flex-col items-center text-center pt-0">
-        {/* 1. Logo matching Reference: Green Squircle + Solid Green CLEAN */}
-        <div className="inline-flex items-center gap-1.5">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-[#008f51] rounded-xl flex items-center justify-center shadow-md border border-white/60">
-            <span className="font-heading text-sm sm:text-base font-black text-white leading-none">U</span>
+      {/* 0. Top Static Announcement Strip (Single Row, Dark Green) */}
+      <div className="relative z-20 w-full bg-[#072618] text-[#a8f0cf] py-1.5 px-1.5 sm:px-3 border-b border-[#008f51]/30 shadow-xs select-none flex items-center justify-center">
+        <div className="flex items-center justify-center gap-1 sm:gap-1.5 text-[9.5px] min-[375px]:text-[10px] min-[420px]:text-[11px] sm:text-[11.5px] font-bold tracking-tight sm:tracking-normal whitespace-nowrap">
+          <span className="text-white font-black tracking-wide">🚚 FREE PICKUP &amp; DELIVERY</span>
+          <span className="text-[#ffe57f] font-black mx-0.5 sm:mx-1">&middot;</span>
+          <span className="text-[#a8f0cf] font-medium">For eligible addresses around Nerul West</span>
+        </div>
+      </div>
+
+      {/* Subtle top daylight gradient - ONLY covers the top text area (height 180px), leaving clothes 100% crisp and unblurred */}
+      <div className="absolute inset-x-0 top-0 h-[180px] bg-gradient-to-b from-white/85 via-white/35 to-transparent pointer-events-none z-10" />
+
+      {/* TOP: Pure Brand Header, Tag, Headline & Description */}
+      <div className="relative z-10 flex flex-col items-center text-center px-3 pt-1.5 sm:pt-2 pb-2">
+        {/* 1. Logo: Green Squircle + Solid Green CLEAN */}
+        <div className="inline-flex items-center gap-1.5 mb-1 sm:mb-1.5">
+          <div className="w-6 h-6 sm:w-7 sm:h-7 bg-[#008f51] rounded-lg sm:rounded-xl flex items-center justify-center shadow-md border border-white/60">
+            <span className="font-heading text-xs sm:text-sm font-black text-white leading-none">U</span>
           </div>
           <span
-            className="font-heading text-xl sm:text-2xl font-black tracking-wide leading-none text-[#008f51]"
+            className="font-heading text-lg sm:text-xl font-black tracking-wide leading-none text-[#008f51]"
             style={{
               filter: 'drop-shadow(0 1px 2px rgba(255,255,255,0.9))',
             }}
@@ -37,71 +54,52 @@ export function CompactHero({ onSearch, onExplore }: CompactHeroProps) {
           </span>
         </div>
 
-        {/* 2. WE ❤ LAUNDRY */}
-        <div
-          className="flex items-center gap-1 font-heading text-[8.5px] sm:text-[9.5px] font-black tracking-[2px] text-[#052818] mt-0.5 uppercase"
-          style={{
-            textShadow: '0 1px 1px rgba(255,255,255,0.9)',
-          }}
-        >
-          <span>WE</span>
-          <svg className="w-2.5 h-2.5 fill-[#008f51]" viewBox="0 0 24 24">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-          </svg>
-          <span>LAUNDRY</span>
+        {/* 2. Tag: YOUR NEIGHBOURHOOD LAUNDRY SERVICE */}
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/90 backdrop-blur-xs border border-[#008f51]/35 shadow-xs mb-1.5 sm:mb-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#008f51]" />
+          <span className="text-[9px] sm:text-[10px] font-black tracking-wider text-[#052818] uppercase">
+            YOUR NEIGHBOURHOOD LAUNDRY SERVICE
+          </span>
         </div>
 
-        {/* 3. CLEANER CLOTHES • BRIGHTER YOU */}
-        <div
-          className="text-[7.5px] sm:text-[8px] font-black tracking-[1.6px] text-[#052818] mt-0.5 uppercase"
-          style={{
-            textShadow: '0 1px 1px rgba(255,255,255,0.9)',
-          }}
-        >
-          CLEANER CLOTHES &bull; BRIGHTER YOU
-        </div>
-
-        {/* 4. MAIN HEADLINE - 1:1 Matching Reference Screenshot with White Border and Green Arc */}
-        <h1 className="font-heading flex flex-col items-center mt-1 sm:mt-1.5 select-none">
-          {/* Line 1: Professional Laundry & (Forest Green with Crisp White Outline) */}
+        {/* 3. MAIN HEADLINE */}
+        <h1 className="font-heading flex flex-col items-center select-none text-center">
+          {/* Line 1 */}
           <span
-            className="text-[26px] sm:text-[33px] md:text-[37px] font-black tracking-tight leading-[1.05] text-[#042817]"
+            className="text-[20px] sm:text-[24px] md:text-[27px] font-black tracking-tight leading-[1.12] text-[#042817]"
             style={{
-              WebkitTextStroke: '1.2px #ffffff',
+              WebkitTextStroke: '1px #ffffff',
               paintOrder: 'stroke fill',
               textShadow:
                 '-1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff, 0 2px 4px rgba(0,20,10,0.2)',
             }}
           >
-            Professional Laundry &amp;
+            Laundry &amp; dry cleaning.
           </span>
 
-          {/* Line 2: Dry Cleaning (Solid Emerald Green, Underline Removed) */}
+          {/* Line 2 */}
           <span
-            className="relative inline-block text-[31px] sm:text-[38px] md:text-[43px] font-black tracking-tight leading-[1.05] text-[#008f51] my-0.5"
+            className="relative inline-block text-[22px] sm:text-[26px] md:text-[29px] font-black tracking-tight leading-[1.12] text-[#008f51] mt-0.5"
             style={{
-              WebkitTextStroke: '1.2px #ffffff',
+              WebkitTextStroke: '1px #ffffff',
               paintOrder: 'stroke fill',
               textShadow:
                 '-1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff, 0 2px 4px rgba(0,20,10,0.2)',
             }}
           >
-            Dry Cleaning
-          </span>
-
-          {/* Line 3: Services (Forest Green with Crisp White Outline) */}
-          <span
-            className="text-[26px] sm:text-[33px] md:text-[37px] font-black tracking-tight leading-[1.05] text-[#042817]"
-            style={{
-              WebkitTextStroke: '1.2px #ffffff',
-              paintOrder: 'stroke fill',
-              textShadow:
-                '-1.5px -1.5px 0 #ffffff, 1.5px -1.5px 0 #ffffff, -1.5px 1.5px 0 #ffffff, 1.5px 1.5px 0 #ffffff, 0 2px 4px rgba(0,20,10,0.2)',
-            }}
-          >
-            Services
+            Right to your door.
           </span>
         </h1>
+
+        {/* 4. Description (compact 2-line layout that sits cleanly above the clothing rack) */}
+        <p
+          className="mt-1.5 sm:mt-2 max-w-[370px] sm:max-w-[420px] text-[11px] sm:text-[11.5px] font-medium text-[#0c2b1e] leading-snug text-center px-2 select-none"
+          style={{
+            textShadow: '0 1px 2px rgba(255,255,255,0.95)',
+          }}
+        >
+          Get everyday laundry washed and folded, clothes washed and ironed, or eligible garments dry-cleaned&mdash;without travelling to the store.
+        </p>
       </div>
     </header>
   );

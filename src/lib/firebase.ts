@@ -6,6 +6,7 @@ import {
   set,
   get,
   update,
+  remove,
   Database,
 } from 'firebase/database';
 import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
@@ -63,16 +64,24 @@ if (typeof window !== 'undefined') {
 export { app };
 
 export interface BookingPayload {
-  serviceType: 'pickup' | 'home-visit' | 'vip-membership' | 'general-inquiry' | string;
+  serviceType: string;
+  service?: string;
+  services?: string[];
+  selectedServices?: string[];
   tier?: 'Silver (₹5,000)' | 'Gold (₹7,000)' | 'Platinum (₹10,000)' | string;
   customerName: string;
   phone: string;
   address?: string;
   preferredDate?: string;
   preferredTimeSlot?: string;
-  notes?: string;
+  quantity?: string;
   items?: { name: string; quantity: number; price: number }[] | string;
+  contactPreference?: string;
+  customerNotes?: string;
+  notes?: string;
   totalEstimate?: number;
+  total?: string;
+  qty?: string;
   status: 'new' | 'confirmed' | 'in-progress' | 'completed' | string;
   createdAt?: unknown;
 }
@@ -88,10 +97,28 @@ export async function createBooking(
     const bookingId = 'UC-' + Math.floor(26100 + Math.random() * 8000);
     const timestamp = new Date().toISOString();
 
+    const servicesList =
+      payload.services ||
+      payload.selectedServices ||
+      (payload.service ? [payload.service] : (payload.serviceType ? [payload.serviceType] : []));
+    const serviceName =
+      payload.service ||
+      (servicesList.length > 0 ? servicesList.join(', ') : payload.serviceType) ||
+      'Laundry Service';
+
     const bookingData = {
       ...payload,
       id: bookingId,
       orderId: bookingId,
+      service: serviceName,
+      serviceType: serviceName,
+      services: servicesList,
+      quantity: payload.quantity || '',
+      qty: payload.qty || payload.quantity || '',
+      total: payload.total || (payload.totalEstimate ? `₹${payload.totalEstimate}` : 'To confirm'),
+      items: typeof payload.items === 'string' ? payload.items : '',
+      contactPreference: payload.contactPreference || 'WhatsApp',
+      notes: payload.notes || payload.customerNotes || '',
       status: payload.status || 'New Request',
       createdAt: timestamp,
       timestamp,
@@ -167,3 +194,82 @@ function saveLocalBooking(data: Record<string, unknown>) {
     }
   }
 }
+
+export function getDeletedOrderIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem('uclean_deleted_order_ids');
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function deleteLocalBooking(orderId: string) {
+  if (typeof window === 'undefined' || !orderId) return;
+  try {
+    const cleanId = orderId.replace(/^#/, '');
+    const existing = JSON.parse(localStorage.getItem('uclean_local_bookings') || '[]');
+    if (Array.isArray(existing)) {
+      const updated = existing.filter(
+        (b: any) =>
+          b &&
+          b.id !== orderId &&
+          b.id !== cleanId &&
+          b.orderId !== orderId &&
+          b.orderId !== cleanId
+      );
+      localStorage.setItem('uclean_local_bookings', JSON.stringify(updated));
+    }
+    const set = getDeletedOrderIds();
+    set.add(orderId);
+    set.add(cleanId);
+    localStorage.setItem('uclean_deleted_order_ids', JSON.stringify(Array.from(set)));
+  } catch (e) {
+    console.warn('Local storage delete warning:', e);
+  }
+}
+
+export async function deleteBooking(orderId: string): Promise<boolean> {
+  if (!orderId) return false;
+  const cleanId = orderId.replace(/^#/, '');
+
+  // 1. Immediately delete from local cache & blacklist from reloading
+  deleteLocalBooking(orderId);
+  deleteLocalBooking(cleanId);
+
+  // 2. Erase permanently from Firebase Realtime Database
+  try {
+    // Delete direct keys
+    await remove(ref(rtdb, `bookings/${cleanId}`)).catch(() => {});
+    if (orderId !== cleanId) {
+      await remove(ref(rtdb, `bookings/${orderId}`)).catch(() => {});
+    }
+
+    // Scan bookings root to catch any node created with custom/push key
+    const snap = await get(ref(rtdb, 'bookings')).catch(() => null);
+    if (snap && snap.exists()) {
+      const val = snap.val();
+      for (const k of Object.keys(val)) {
+        const item = val[k];
+        if (
+          k === cleanId ||
+          k === orderId ||
+          item?.id === cleanId ||
+          item?.id === orderId ||
+          item?.orderId === cleanId ||
+          item?.orderId === orderId
+        ) {
+          await remove(ref(rtdb, `bookings/${k}`)).catch(() => {});
+        }
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('deleteBooking RTDB error:', err);
+    return false;
+  }
+}
+

@@ -51,6 +51,7 @@ import {
   Users,
   Settings,
   Menu,
+  Edit3,
 } from 'lucide-react';
 import {
   sendWhatsAppMessage,
@@ -58,8 +59,8 @@ import {
   generateQuotationTemplate,
   generateReadyForDeliveryTemplate,
 } from '@/lib/whatsapp';
-import { rtdb } from '@/lib/firebase';
-import { ref, onValue, update, set } from 'firebase/database';
+import { rtdb, deleteBooking, getDeletedOrderIds } from '@/lib/firebase';
+import { ref, onValue, update, set, remove, get } from 'firebase/database';
 import {
   validateIndianMobile,
   validateCustomerName,
@@ -71,12 +72,19 @@ import {
   getActiveSlotsList,
   getDefaultSlotForDate,
 } from '@/lib/slotAvailability';
+import {
+  PRIMARY_SERVICES,
+  getServiceDisplay,
+  extractBasePrice,
+  isServiceMatch,
+} from '@/lib/servicesCatalog';
 
 export interface CrmOrder {
   id: string;
   name: string;
   phone: string;
   service: string;
+  services?: string[];
   qty: string;
   total: string;
   address: string;
@@ -99,6 +107,7 @@ export interface CrmOrder {
     | string;
   notes: string;
   items?: string;
+  contactPreference?: string;
   createdAt?: string;
   timestamp?: string;
   callDone?: boolean;
@@ -196,6 +205,70 @@ export function formatBookingTimestamp(raw?: string | null): {
   return { fullDateTime, timeAgo, dateOnly, timeOnly };
 }
 
+// Smart parser: Cleanly separates structured services, garments, quantities, contact, and clean notes
+export function parseOrderDetails(
+  rawService?: string,
+  rawNotes?: string,
+  rawItems?: string,
+  rawQty?: string,
+  rawServices?: string[],
+  rawContact?: string
+) {
+  let services: string[] = Array.isArray(rawServices) && rawServices.length > 0 ? [...rawServices] : [];
+  let garments = rawItems && rawItems !== 'None' ? rawItems : '';
+  let quantity = rawQty && rawQty !== 'None' && rawQty !== 'Standard Package' ? rawQty : '';
+  let contact = rawContact || '';
+  let cleanNotes = typeof rawNotes === 'string' ? rawNotes : '';
+
+  // If notes contains the pipe-separated string from earlier bookings:
+  // e.g. "Services: Wash & Fold — ₹109/kg | Garments: None | Approx Qty: None | Notes: None | Contact: WhatsApp"
+  if (cleanNotes.includes('Services:')) {
+    const parts = cleanNotes.split('|').map((p) => p.trim());
+    for (const part of parts) {
+      if (part.startsWith('Services:')) {
+        const s = part.replace('Services:', '').trim();
+        if (s && s !== 'None') {
+          services = s.split(',').map((x) => x.trim()).filter(Boolean);
+        }
+      } else if (part.startsWith('Garments:')) {
+        const g = part.replace('Garments:', '').trim();
+        if (g && g !== 'None') garments = g;
+      } else if (part.startsWith('Approx Qty:')) {
+        const q = part.replace('Approx Qty:', '').trim();
+        if (q && q !== 'None') quantity = q;
+      } else if (part.startsWith('Contact:')) {
+        const c = part.replace('Contact:', '').trim();
+        if (c && c !== 'None') contact = c;
+      } else if (part.startsWith('Notes:')) {
+        const n = part.replace('Notes:', '').trim();
+        if (n && n !== 'None') cleanNotes = n;
+        else cleanNotes = '';
+      }
+    }
+  }
+
+  // If cleanNotes is just a repetitive "Services: ..." or "None", blank it out
+  if (cleanNotes.startsWith('Services:') || cleanNotes === 'None') {
+    cleanNotes = '';
+  }
+
+  const primaryService =
+    services.length > 0
+      ? services.join(', ')
+      : rawService && rawService !== 'pickup' && rawService !== 'general-inquiry'
+      ? rawService
+      : 'Wash & Fold Laundry';
+
+  return {
+    displayService: primaryService,
+    services: services.length > 0 ? services : [primaryService],
+    garments,
+    quantity,
+    contact: contact || 'WhatsApp',
+    cleanNotes,
+  };
+}
+
 // Synthesized audio chime for new live order notification
 function playNewOrderSound() {
   try {
@@ -280,6 +353,95 @@ export function CrmPortal({
   const [newCustPhoneError, setNewCustPhoneError] = useState('');
   const [newCustAddressError, setNewCustAddressError] = useState('');
 
+  // Edit order details & services state
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [editServices, setEditServices] = useState<string[]>([]);
+  const [editQty, setEditQty] = useState('');
+  const [editTotal, setEditTotal] = useState('');
+  const [editItems, setEditItems] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const handleOpenEditOrder = (ord: CrmOrder) => {
+    const currentServices = ord.services && ord.services.length > 0 ? [...ord.services] : [ord.service];
+    setEditServices(currentServices);
+    setEditQty(ord.qty && ord.qty !== 'Standard Package' ? ord.qty : '');
+    setEditTotal(ord.total && ord.total !== 'To confirm' ? ord.total.replace(/^₹/, '') : '');
+    setEditItems(ord.items || '');
+    setEditNotes(ord.notes || '');
+    setIsEditingOrder(true);
+  };
+
+  const handleToggleEditService = (serviceName: string) => {
+    setEditServices((prev) => {
+      const exists = prev.some((s) => isServiceMatch(s, serviceName));
+      if (exists) {
+        return prev.filter((s) => !isServiceMatch(s, serviceName));
+      } else {
+        return [...prev, serviceName];
+      }
+    });
+  };
+
+  const handleAutoCalculateTotal = () => {
+    const sumBase = editServices.reduce((acc, s) => {
+      const disp = getServiceDisplay(s);
+      return acc + (disp.basePrice || 0);
+    }, 0);
+    const qtyNum = parseInt(editQty, 10);
+    const calc = qtyNum && qtyNum > 0 ? sumBase * qtyNum : sumBase;
+    if (calc > 0) {
+      setEditTotal(String(calc));
+    }
+  };
+
+  const handleSaveOrderEdits = async () => {
+    if (!selectedOrder) return;
+    if (editServices.length === 0) {
+      alert('Please keep at least one service selected.');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const primaryService = editServices.join(', ');
+      const cleanTotal = editTotal ? (editTotal.startsWith('₹') ? editTotal : `₹${editTotal}`) : selectedOrder.total;
+      const updates = {
+        service: primaryService,
+        serviceType: primaryService,
+        services: editServices,
+        qty: editQty || 'Standard Package',
+        quantity: editQty || 'Standard Package',
+        total: cleanTotal,
+        totalEstimate: extractBasePrice(cleanTotal) || undefined,
+        items: editItems,
+        notes: editNotes,
+      };
+
+      await update(ref(rtdb, `bookings/${selectedOrder.id}`), updates);
+
+      const updatedOrd: CrmOrder = {
+        ...selectedOrder,
+        service: primaryService,
+        services: editServices,
+        qty: editQty || 'Standard Package',
+        total: cleanTotal,
+        items: editItems,
+        notes: editNotes,
+      };
+
+      setOrders((prev) => prev.map((o) => (o.id === selectedOrder.id ? updatedOrd : o)));
+      setSelectedOrder(updatedOrd);
+      setIsEditingOrder(false);
+      showToast('Order details & services updated!', 'success');
+    } catch (err) {
+      console.error('Failed to update order:', err);
+      showToast('Failed to update order', 'error');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const previousOrderCount = useRef<number>(0);
 
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -322,31 +484,44 @@ export function CrmPortal({
     // 1. Initial hydration from local storage if available
     try {
       localStorage.removeItem('uclean_demo_orders');
+      const deletedIds = getDeletedOrderIds();
       const localCached = JSON.parse(localStorage.getItem('uclean_local_bookings') || '[]');
       if (Array.isArray(localCached) && localCached.length > 0 && isMounted) {
-        const mappedLocal: CrmOrder[] = localCached.map((b: any) => {
-          const rawTime = b.createdAt || b.timestamp;
-          return {
-            id: b.id || b.orderId || `UC-${Math.floor(26100 + Math.random() * 8000)}`,
-            name: b.customerName || b.name || 'Customer',
-            phone: b.phone || '',
-            service: String(b.serviceType || b.service || 'Laundry Service'),
-            qty: b.quantity || b.qty || 'Standard Package',
-            total: b.totalEstimate ? String(b.totalEstimate) : (b.total ? String(b.total) : 'To confirm'),
-            address: b.address || 'Nerul West',
-            slot: b.slot || `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Standard Slot'}`,
-            date: b.preferredDate || b.date || 'Today',
-            time: b.preferredTimeSlot || b.time || 'Standard Slot',
-            status: b.status ? capitalizeStatus(b.status) : 'New Request',
-            notes: typeof b.notes === 'string' ? b.notes : '',
-            items: typeof b.items === 'string' ? b.items : '',
-            createdAt: rawTime || new Date().toISOString(),
-            timestamp: rawTime || new Date().toISOString(),
-            callDone: b.status !== 'new' && b.status !== 'New Request',
-            pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(b.status),
-          };
-        });
-        setOrders((prev) => mergeOrdersList(prev, mappedLocal));
+        const mappedLocal: CrmOrder[] = localCached
+          .filter((b: any) => b && !deletedIds.has(b.id) && !deletedIds.has(b.orderId))
+          .map((b: any) => {
+            const rawTime = b.createdAt || b.timestamp;
+            const parsed = parseOrderDetails(
+              b.service || b.serviceType,
+              b.notes,
+              b.items,
+              b.quantity || b.qty,
+              b.services,
+              b.contactPreference || b.contact
+            );
+            return {
+              id: b.id || b.orderId || `UC-${Math.floor(26100 + Math.random() * 8000)}`,
+              name: b.customerName || b.name || 'Customer',
+              phone: b.phone || '',
+              service: parsed.displayService,
+              services: parsed.services,
+              qty: parsed.quantity || b.quantity || b.qty || 'Standard Package',
+              total: b.totalEstimate ? String(b.totalEstimate) : (b.total ? String(b.total) : 'To confirm'),
+              address: b.address || 'Nerul West',
+              slot: b.slot || `${b.preferredDate || 'Today'} · ${b.preferredTimeSlot || 'Standard Slot'}`,
+              date: b.preferredDate || b.date || 'Today',
+              time: b.preferredTimeSlot || b.time || 'Standard Slot',
+              status: b.status ? capitalizeStatus(b.status) : 'New Request',
+              notes: parsed.cleanNotes,
+              items: parsed.garments,
+              contactPreference: parsed.contact,
+              createdAt: rawTime || new Date().toISOString(),
+              timestamp: rawTime || new Date().toISOString(),
+              callDone: b.status !== 'new' && b.status !== 'New Request',
+              pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(b.status),
+            };
+          });
+        setOrders(mappedLocal);
       }
     } catch {
       // ignore
@@ -359,49 +534,72 @@ export function CrmPortal({
       unsubscribeRtdb = onValue(
         bookingsRef,
         (snapshot) => {
+          const deletedIds = getDeletedOrderIds();
           if (snapshot.exists()) {
             const val = snapshot.val();
             const rtdbList: CrmOrder[] = Object.keys(val)
               .map((k) => {
                 const item = val[k];
                 const rawTime = item.createdAt || item.timestamp;
+                const parsed = parseOrderDetails(
+                  item.service || item.serviceType,
+                  item.notes,
+                  item.items,
+                  item.quantity || item.qty,
+                  item.services,
+                  item.contactPreference || item.contact
+                );
                 return {
                   id: item.id || item.orderId || k,
                   name: item.customerName || item.name || 'Customer',
                   phone: item.phone || '',
-                  service: String(item.serviceType || item.service || 'Laundry Service'),
-                  qty: item.quantity || item.qty || 'Standard Package',
+                  service: parsed.displayService,
+                  services: parsed.services,
+                  qty: parsed.quantity || item.quantity || item.qty || 'Standard Package',
                   total: item.totalEstimate ? String(item.totalEstimate) : (item.total ? String(item.total) : 'To confirm'),
                   address: item.address || 'Nerul West',
                   slot: item.slot || `${item.preferredDate || 'Today'} · ${item.preferredTimeSlot || 'Standard Slot'}`,
                   date: item.preferredDate || item.date || 'Today',
                   time: item.preferredTimeSlot || item.time || 'Standard Slot',
                   status: item.status ? capitalizeStatus(item.status) : 'New Request',
-                  notes: typeof item.notes === 'string' ? item.notes : '',
-                  items: typeof item.items === 'string' ? item.items : '',
+                  notes: parsed.cleanNotes,
+                  items: parsed.garments,
+                  contactPreference: parsed.contact,
                   createdAt: rawTime || new Date().toISOString(),
                   timestamp: rawTime || new Date().toISOString(),
                   callDone: item.status !== 'new' && item.status !== 'New Request',
                   pickupDone: ['picked-up', 'Picked Up', 'in-progress', 'Cleaning In Progress', 'Delivered'].includes(item.status),
                 };
               })
+              .filter(
+                (o) =>
+                  !deletedIds.has(o.id) &&
+                  !deletedIds.has(o.id.replace(/^#/, ''))
+              )
               .reverse();
 
-            if (isMounted && rtdbList.length > 0) {
-              setOrders((prev) => {
-                const merged = mergeOrdersList(prev, rtdbList);
-                if (previousOrderCount.current > 0 && merged.length > previousOrderCount.current && soundEnabled) {
-                  playNewOrderSound();
-                  showToast('🔔 New Customer Booking Received!', 'success');
-                }
-                previousOrderCount.current = merged.length;
-                return merged;
-              });
+            if (isMounted) {
+              setOrders(rtdbList);
+
+              if (previousOrderCount.current > 0 && rtdbList.length > previousOrderCount.current && soundEnabled) {
+                playNewOrderSound();
+                showToast('🔔 New Customer Booking Received!', 'success');
+              }
+              previousOrderCount.current = rtdbList.length;
 
               setSelectedOrder((prev) => {
                 if (!prev) return null;
-                return rtdbList.find((m) => m.id === prev.id) || prev;
+                if (deletedIds.has(prev.id) || deletedIds.has(prev.id.replace(/^#/, ''))) {
+                  setIsSidebarOpen(false);
+                  return null;
+                }
+                return rtdbList.find((m) => m.id === prev.id) || null;
               });
+            }
+          } else {
+            if (isMounted) {
+              setOrders([]);
+              setSelectedOrder(null);
             }
           }
         },
@@ -731,24 +929,27 @@ export function CrmPortal({
     showToast(`Order #${targetOrder.id} moved to Cleaning / Wash!`, 'info');
   };
 
-  // Delete single order
+  // Delete single order permanently from database and cache
   const handleDeleteOrder = async (orderId: string) => {
-    const sure = window.confirm(`Permanently remove Order #${orderId} from CRM database?`);
+    const cleanId = orderId.replace(/^#/, '');
+    const sure = window.confirm(`Permanently remove Order #${cleanId} from CRM database?\n\nThis will completely erase the order and cannot be undone.`);
     if (!sure) return;
 
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
-    if (selectedOrder && selectedOrder.id === orderId) {
+    // 1. Immediately remove from React state & close drawer if selected
+    setOrders((prev) => prev.filter((o) => o.id !== orderId && o.id !== cleanId));
+    if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.id === cleanId)) {
       setIsSidebarOpen(false);
       setSelectedOrder(null);
     }
 
+    // 2. Perform deep deletion across local storage & Firebase Realtime Database
     try {
-      set(ref(rtdb, `bookings/${orderId}`), null).catch(() => {});
-    } catch {
-      // Local
+      await deleteBooking(orderId);
+      showToast(`Order #${cleanId} permanently deleted!`, 'info');
+    } catch (e) {
+      console.error('Delete order error:', e);
+      showToast(`Order #${cleanId} removed`, 'info');
     }
-
-    showToast(`Order #${orderId} removed`, 'info');
   };
 
   // Export orders to CSV
@@ -1014,7 +1215,7 @@ export function CrmPortal({
   // Copy dispatch summary
   const handleCopyRiderDispatch = (ord: CrmOrder) => {
     const timeInfo = formatBookingTimestamp(ord.createdAt || ord.timestamp);
-    const text = `*UCLEAN PICKUP DISPATCH*\nOrder: #${ord.id}\nBooked: ${timeInfo.fullDateTime}\nCustomer: ${ord.name}\nPhone: ${ord.phone}\nSlot: ${ord.slot}\nAddress: ${ord.address}\nServices: ${ord.service}\nNotes: ${ord.notes || 'None'}`;
+    const text = `*UCLEAN PICKUP DISPATCH*\nOrder: #${ord.id}\nBooked: ${timeInfo.fullDateTime}\nCustomer: ${ord.name}\nPhone: ${ord.phone}\nSlot: ${ord.slot}\nAddress: ${ord.address}\nServices: ${ord.service}${ord.qty && ord.qty !== 'None' ? `\nApprox Qty: ${ord.qty}` : ''}${ord.items && ord.items !== 'None' ? `\nGarments: ${ord.items}` : ''}${ord.notes && ord.notes !== 'None' ? `\nNotes: ${ord.notes}` : ''}`;
     copyToClipboard(text, 'Rider Dispatch Slip');
   };
 
@@ -1438,23 +1639,125 @@ export function CrmPortal({
             </div>
           </div>
 
-          {/* Garments & Services Package */}
-          <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 text-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                <Package className="w-3.5 h-3.5 text-slate-400" />
-                Garment &amp; Service Package
+          {/* Selected Services & Order Specifications Card */}
+          <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50 p-4 sm:p-4.5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                <ShoppingBag className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Selected Service(s)</span>
               </span>
-              <span className="font-mono font-bold text-slate-900">
-                Estimate: {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
-              </span>
+              <div className="flex items-center gap-2">
+                {ord.total && ord.total !== 'To confirm' && ord.total !== '0' ? (
+                  <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                    Total: {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                    To confirm after weigh/call
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditOrder(ord)}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition active:scale-95 cursor-pointer"
+                  title="Edit Selected Services, Quantity or Set Total Price"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Set Price / Edit</span>
+                </button>
+              </div>
             </div>
-            <p className="font-bold text-slate-900 text-sm">
-              {ord.service} {ord.items ? `— ${ord.items}` : ''}
-            </p>
-            {ord.notes && (
-              <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 italic">
-                &quot;{ord.notes}&quot;
+
+            {/* Service Badges */}
+            <div className="space-y-1.5">
+              {(ord.services && ord.services.length > 0 ? ord.services : [ord.service]).map((srv, sIdx) => {
+                const disp = getServiceDisplay(srv);
+                return (
+                  <div
+                    key={sIdx}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/90 text-emerald-950 font-bold text-xs shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center text-[11px] font-black shrink-0">
+                        ✓
+                      </span>
+                      <span className="text-sm shrink-0">{disp.icon}</span>
+                      <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                        <span className="truncate">{disp.title}</span>
+                        {disp.rate && (
+                          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-300/80">
+                            {disp.rate}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[9.5px] uppercase tracking-wide font-extrabold text-emerald-700 bg-white px-2 py-0.5 rounded-md border border-emerald-200/80 shrink-0">
+                      Selected
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Structured Specifications Grid */}
+            <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+              {/* Approx Quantity */}
+              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-0.5">
+                  <Package className="w-3 h-3 text-slate-400" />
+                  Approx. Quantity
+                </span>
+                <p className="font-bold text-slate-800 text-[11.5px] truncate">
+                  {ord.qty && ord.qty !== 'None' ? ord.qty : 'Standard Bag / To Weigh'}
+                </p>
+              </div>
+
+              {/* Garment Details */}
+              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-0.5">
+                  <FileText className="w-3 h-3 text-slate-400" />
+                  Garments Note
+                </span>
+                <p className="font-bold text-slate-800 text-[11.5px] truncate">
+                  {ord.items && ord.items !== 'None' ? ord.items : 'General Clothes'}
+                </p>
+              </div>
+
+              {/* Contact Preference */}
+              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-0.5">
+                  <PhoneCall className="w-3 h-3 text-slate-400" />
+                  Contact Via
+                </span>
+                <p className="font-bold text-emerald-700 text-[11.5px] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  {ord.contactPreference || 'WhatsApp'}
+                </p>
+              </div>
+
+              {/* Pickup Time Window */}
+              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-0.5">
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  Pickup Slot
+                </span>
+                <p className="font-bold text-blue-700 text-[11.5px] truncate">
+                  {ord.slot}
+                </p>
+              </div>
+            </div>
+
+            {/* Customer Special Instructions (cleanly separated, only if present) */}
+            {ord.notes && ord.notes.trim() && ord.notes.trim() !== 'None' && (
+              <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/90 text-xs space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-amber-800 flex items-center gap-1">
+                  <FileText className="w-3 h-3 text-amber-600" />
+                  Customer Instructions
+                </span>
+                <p className="font-medium text-amber-950 italic">
+                  &ldquo;{ord.notes}&rdquo;
+                </p>
               </div>
             )}
           </div>
@@ -2196,16 +2499,26 @@ export function CrmPortal({
 
                             {/* Service Package */}
                             <td className="py-3 px-3.5 text-slate-700 whitespace-nowrap">
-                              <span className="truncate max-w-[140px] xl:max-w-[190px] block font-medium text-[11px] whitespace-nowrap" title={ord.service}>
-                                {ord.service}
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200/90 font-bold text-[11px] max-w-[180px] xl:max-w-[220px] truncate shadow-2xs"
+                                title={ord.service}
+                              >
+                                <ShoppingBag className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span className="truncate">{ord.service}</span>
                               </span>
                             </td>
 
                             {/* Total Amount */}
                             <td className="py-3 px-3.5 whitespace-nowrap">
-                              <span className="font-mono font-bold text-slate-900 text-xs whitespace-nowrap">
-                                {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
-                              </span>
+                              {ord.total && ord.total !== 'To confirm' && ord.total !== '0' ? (
+                                <span className="font-mono font-bold text-slate-900 text-xs whitespace-nowrap">
+                                  {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 whitespace-nowrap">
+                                  To confirm
+                                </span>
+                              )}
                             </td>
 
                             {/* Status Chip */}
@@ -2300,6 +2613,13 @@ export function CrmPortal({
                                   <Eye className="w-3 h-3 text-slate-600 shrink-0" />
                                   <span className="whitespace-nowrap">Details</span>
                                 </button>
+                                <button
+                                  onClick={() => handleDeleteOrder(ord.id)}
+                                  className="h-7 w-7 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 inline-flex items-center justify-center border border-slate-200 hover:border-rose-200 transition-colors shrink-0 cursor-pointer"
+                                  title="Delete Order Permanently"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -2348,9 +2668,15 @@ export function CrmPortal({
                         <span className="font-mono whitespace-nowrap">{ord.phone || 'No phone'}</span>
                       </p>
                     </div>
-                    <span className="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap shrink-0">
-                      {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
-                    </span>
+                    {ord.total && ord.total !== 'To confirm' && ord.total !== '0' ? (
+                      <span className="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 whitespace-nowrap shrink-0">
+                        {ord.total.startsWith('₹') ? ord.total : `₹${ord.total}`}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 whitespace-nowrap shrink-0">
+                        To confirm
+                      </span>
+                    )}
                   </div>
 
                   {/* Samne wale ne kab book kiya tha */}
@@ -2365,12 +2691,12 @@ export function CrmPortal({
                   </div>
 
                   {/* Service & Slot */}
-                  <div className="mt-2 space-y-1 text-xs text-slate-600">
-                    <div className="flex items-center gap-1.5 font-medium truncate">
-                      <Package className="w-3 h-3 text-slate-400 shrink-0" />
+                  <div className="mt-2 space-y-1.5 text-xs text-slate-600">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-900 truncate bg-emerald-50/80 px-2 py-1 rounded-lg border border-emerald-200/80">
+                      <ShoppingBag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <span className="truncate">{ord.service}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 font-medium truncate text-slate-500">
+                    <div className="flex items-center gap-1.5 font-medium truncate text-slate-500 px-0.5">
                       <Clock className="w-3 h-3 text-slate-400 shrink-0" />
                       <span className="truncate">{ord.slot}</span>
                     </div>
@@ -2444,13 +2770,22 @@ export function CrmPortal({
                       )}
                     </div>
 
-                    <button
-                      onClick={() => handleOpenSidebar(ord)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-bold inline-flex items-center gap-0.5 ml-auto whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      <span className="whitespace-nowrap">View Details</span>
-                      <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-                    </button>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        onClick={() => handleDeleteOrder(ord.id)}
+                        className="h-7 w-7 rounded-lg bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 inline-flex items-center justify-center border border-slate-200 hover:border-rose-200 transition-colors shrink-0 cursor-pointer"
+                        title="Delete Order Permanently"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenSidebar(ord)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <span className="whitespace-nowrap">View Details</span>
+                        <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -2848,6 +3183,226 @@ export function CrmPortal({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 6.5. EDIT ORDER SERVICES & DETAILS MODAL */}
+      {/* ========================================================================= */}
+      {isEditingOrder && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => !savingEdit && setIsEditingOrder(false)}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] z-10 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 px-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-xs">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900">
+                    Edit Order & Services
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Order #{selectedOrder.id} &bull; {selectedOrder.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingOrder(false)}
+                disabled={savingEdit}
+                className="w-8 h-8 rounded-full hover:bg-slate-200/80 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              {/* Service Selection Toggle Grid */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <ShoppingBag className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Selected Services ({editServices.length})</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Click to add or remove
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {PRIMARY_SERVICES.map((srv) => {
+                    const isSelected = editServices.some((s) => isServiceMatch(s, srv.id) || isServiceMatch(s, srv.name));
+                    return (
+                      <button
+                        key={srv.id}
+                        type="button"
+                        onClick={() => handleToggleEditService(srv.name)}
+                        className={`text-left p-2.5 rounded-xl border transition flex items-center justify-between gap-2 cursor-pointer ${
+                          isSelected
+                            ? 'bg-purple-50/90 border-purple-300 text-purple-950 font-bold shadow-2xs ring-1 ring-purple-300'
+                            : 'bg-slate-50/70 hover:bg-slate-100/80 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-base shrink-0">{srv.icon}</span>
+                          <div className="min-w-0">
+                            <p className="text-[11.5px] truncate leading-tight font-bold">{srv.name}</p>
+                            <p className="text-[10px] font-semibold text-emerald-700">{srv.rate}</p>
+                          </div>
+                        </div>
+                        <span
+                          className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 transition ${
+                            isSelected
+                              ? 'bg-purple-600 text-white'
+                              : 'border border-slate-300 bg-white text-transparent'
+                          }`}
+                        >
+                          ✓
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quantity Stepper & Price Calculation */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Quantity */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
+                    <Package className="w-3 h-3 text-slate-500" />
+                    <span>Approx Quantity</span>
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = parseInt(editQty, 10);
+                        if (!isNaN(num) && num > 1) {
+                          setEditQty(String(num - 1));
+                        } else if (isNaN(num)) {
+                          setEditQty('1');
+                        }
+                      }}
+                      className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0"
+                    >
+                      &minus;
+                    </button>
+                    <input
+                      type="text"
+                      value={editQty}
+                      onChange={(e) => setEditQty(e.target.value)}
+                      placeholder="e.g. 2, 5, 3 kg"
+                      className="w-full px-2.5 h-9 bg-slate-50 border border-slate-300 focus:border-purple-600 focus:bg-white rounded-lg text-center font-bold text-xs text-slate-900 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = parseInt(editQty, 10);
+                        if (!isNaN(num)) {
+                          setEditQty(String(num + 1));
+                        } else {
+                          setEditQty('2');
+                        }
+                      }}
+                      className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base flex items-center justify-center transition active:scale-95 cursor-pointer shrink-0"
+                    >
+                      &#43;
+                    </button>
+                  </div>
+                </div>
+
+                {/* Total Price Decided by Admin */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1">
+                      <span>Total Amount (₹)</span>
+                    </label>
+                    <span className="text-[9.5px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Decided by Admin
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-500 font-bold text-xs">₹</span>
+                    <input
+                      type="text"
+                      value={editTotal}
+                      onChange={(e) => setEditTotal(e.target.value)}
+                      placeholder="Enter amount after weigh/call (e.g. 250)"
+                      className="w-full pl-7 pr-3 h-9 bg-slate-50 border border-slate-300 focus:border-purple-600 focus:bg-white rounded-lg text-xs font-bold text-slate-900 outline-none"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Write amount after confirming with customer or weighing garments. Leave empty for &ldquo;To confirm&rdquo;.
+                  </p>
+                </div>
+              </div>
+
+              {/* Garment Details & Instructions */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
+                  <FileText className="w-3 h-3 text-slate-500" />
+                  <span>Garments Note</span>
+                </label>
+                <input
+                  type="text"
+                  value={editItems}
+                  onChange={(e) => setEditItems(e.target.value)}
+                  placeholder="e.g. 2 Sarees, 1 Silk Suit, 3 Shirts"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-purple-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
+                  Special Notes / Instructions
+                </label>
+                <textarea
+                  rows={2}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="e.g. Starch sarees, gentle steam iron, collar stain on blue shirt"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 focus:border-purple-600 focus:bg-white rounded-xl text-xs font-semibold text-slate-900 outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 px-5 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsEditingOrder(false)}
+                disabled={savingEdit}
+                className="px-4 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-semibold text-xs transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveOrderEdits}
+                disabled={savingEdit}
+                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-98 transition cursor-pointer disabled:opacity-50"
+              >
+                {savingEdit ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Changes</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

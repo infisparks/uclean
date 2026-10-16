@@ -10,6 +10,13 @@ export interface CatalogService {
   isPrimary?: boolean;
 }
 
+// Helper: Extract numeric price from rate string (e.g. 'From ₹119/item' -> 119)
+export function extractBasePrice(rateStr?: string): number {
+  if (!rateStr) return 0;
+  const match = rateStr.match(/₹\s*(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
 // Helper: Check if service ID or Name matches target string flexibly
 export function isServiceMatch(serviceIdOrName: string, target: string): boolean {
   if (!serviceIdOrName || !target) return false;
@@ -20,7 +27,48 @@ export function isServiceMatch(serviceIdOrName: string, target: string): boolean
   const cleanA = a.replace(/[^a-z0-9]/g, '');
   const cleanB = b.replace(/[^a-z0-9]/g, '');
   if (cleanA && cleanB && (cleanA.includes(cleanB) || cleanB.includes(cleanA))) return true;
+
+  // Match key phrase tokens (e.g. "Home Textiles & Upholstery Care" matches "Home Textiles & Sofa Cleaning")
+  const tokensA = a.split(/[\s&,/–—\(\)]+/).filter((w) => w.length >= 4);
+  const tokensB = b.split(/[\s&,/–—\(\)]+/).filter((w) => w.length >= 4);
+  const overlap = tokensA.filter((w) => tokensB.includes(w));
+  if (overlap.length >= 2) return true;
+  if (overlap.length === 1 && (tokensA.length === 1 || tokensB.length === 1)) return true;
+
   return false;
+}
+
+// Helper: Given any service string, resolve its clean Title, Rate badge, Icon, and base price
+export function getServiceDisplay(serviceNameOrId: string): { title: string; rate: string; icon: string; basePrice: number } {
+  let title = (serviceNameOrId || '').trim();
+  let rate = '';
+  let icon = '🧺';
+
+  // Check if string already contains rate like "Women's Ethnic & Saree — From ₹69/item"
+  if (title.includes('—')) {
+    const parts = title.split('—').map((s) => s.trim());
+    title = parts[0];
+    rate = parts[1] || '';
+  }
+
+  // Look up in PRIMARY_SERVICES or ALL_SERVICES_CATALOG
+  const match =
+    PRIMARY_SERVICES.find(
+      (s) => isServiceMatch(s.id, title) || isServiceMatch(s.name, title)
+    ) ||
+    ALL_SERVICES_CATALOG.find(
+      (s) => isServiceMatch(s.id, title) || isServiceMatch(s.name, title)
+    );
+
+  if (match) {
+    title = match.name;
+    if (!rate) rate = match.rate;
+    icon = match.icon;
+  }
+
+  const basePrice = extractBasePrice(rate);
+
+  return { title, rate, icon, basePrice };
 }
 
 // 1. The Primary Commercial Store Categories (Matching Homepage Grid 1:1)

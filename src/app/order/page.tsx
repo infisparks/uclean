@@ -38,6 +38,8 @@ import {
   searchCatalog,
   CatalogService,
   isServiceMatch,
+  getServiceDisplay,
+  extractBasePrice,
 } from '@/lib/servicesCatalog';
 import { AllServicesModal } from '@/components/AllServicesModal';
 
@@ -80,47 +82,60 @@ function OrderFormContent() {
   const [phoneError, setPhoneError] = useState('');
   const [addressError, setAddressError] = useState('');
 
-  // Primary services by default; if urlService is specified, that service is placed as the 1st card and auto-selected!
+  // Selected services are always positioned at Card 1 (top of the grid) so users can see them,
+  // view their prices, unselect them, or select other services seamlessly!
   const filteredAvailableServices = React.useMemo(() => {
     const raw = serviceSearch.toLowerCase().trim();
     if (raw) return searchCatalog(raw, 'All');
 
-    // If urlService is present, find it and ensure it's at index 0 (the first card)!
-    if (urlService) {
-      const matched =
-        PRIMARY_SERVICES.find(
-          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
-        ) ||
-        ALL_SERVICES_CATALOG.find(
-          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
-        );
+    // 1. Gather all currently selected services and convert them to CatalogService items for position 1..N
+    const selectedCatalogItems: CatalogService[] = [];
+    for (const sel of selectedServices) {
+      const match =
+        PRIMARY_SERVICES.find((s) => isServiceMatch(s.id, sel) || isServiceMatch(s.name, sel)) ||
+        ALL_SERVICES_CATALOG.find((s) => isServiceMatch(s.id, sel) || isServiceMatch(s.name, sel));
 
-      if (matched) {
-        const others = PRIMARY_SERVICES.filter((s) => !isServiceMatch(s.id, matched.id));
-        return [matched, ...others];
+      if (match) {
+        if (!selectedCatalogItems.some((item) => isServiceMatch(item.id, match.id) || isServiceMatch(item.name, match.name))) {
+          selectedCatalogItems.push({
+            ...match,
+            name: sel || match.name,
+          });
+        }
+      } else {
+        const disp = getServiceDisplay(sel);
+        selectedCatalogItems.push({
+          id: sel,
+          name: disp.title || sel,
+          icon: disp.icon || '🧺',
+          rate: disp.rate || 'Standard Rate',
+          category: 'Selected',
+          keywords: sel.toLowerCase(),
+          isPrimary: true,
+        });
       }
     }
 
-    return PRIMARY_SERVICES;
-  }, [serviceSearch, urlService]);
+    // 2. Filter remaining PRIMARY_SERVICES so they don't duplicate
+    const remainingPrimary = PRIMARY_SERVICES.filter(
+      (p) => !selectedCatalogItems.some((sel) => isServiceMatch(p.id, sel.id) || isServiceMatch(p.name, sel.name))
+    );
+
+    // Selected items ALWAYS appear first (Card 1, etc.), followed by the rest
+    return [...selectedCatalogItems, ...remainingPrimary];
+  }, [serviceSearch, selectedServices]);
 
   useEffect(() => {
     if (urlService) {
-      const matched =
-        PRIMARY_SERVICES.find(
-          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
-        ) ||
-        ALL_SERVICES_CATALOG.find(
-          (s) => isServiceMatch(s.id, urlService) || isServiceMatch(s.name, urlService)
-        );
-
-      if (matched) {
-        setSelectedServices([matched.id]);
-      } else {
-        setSelectedServices([urlService]);
+      const parsed = urlService
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (parsed.length > 0) {
+        setSelectedServices(parsed);
       }
     } else {
-      setSelectedServices([PRIMARY_SERVICES[0].id]);
+      setSelectedServices([]);
     }
 
     if (urlGarment) {
@@ -128,13 +143,26 @@ function OrderFormContent() {
     }
   }, [urlService, urlGarment]);
 
+  // Dynamic estimated total based on selected services & quantity
+  const estimatedTotal = React.useMemo(() => {
+    if (selectedServices.length === 0) return 0;
+    const sumBase = selectedServices.reduce((acc, s) => {
+      const disp = getServiceDisplay(s);
+      return acc + (disp.basePrice || 0);
+    }, 0);
+    const qtyNum = parseInt(quantity, 10);
+    return qtyNum && qtyNum > 0 ? sumBase * qtyNum : sumBase;
+  }, [selectedServices, quantity]);
+
   const toggleService = (srvId: string) => {
+    const disp = getServiceDisplay(srvId);
+    const targetName = disp.title || srvId;
     setSelectedServices((prev) => {
-      const exists = prev.some((s) => isServiceMatch(s, srvId));
+      const exists = prev.some((s) => isServiceMatch(s, targetName) || isServiceMatch(s, srvId));
       if (exists) {
-        return prev.filter((s) => !isServiceMatch(s, srvId));
+        return prev.filter((s) => !isServiceMatch(s, targetName) && !isServiceMatch(s, srvId));
       } else {
-        return [...prev, srvId];
+        return [...prev, targetName];
       }
     });
   };
@@ -181,14 +209,24 @@ function OrderFormContent() {
     setLoading(true);
     try {
       const fullAddress = `${addressVal.formatted}${building ? `, ${building}` : ''} (PIN: ${pin})`;
+      const chosenServicesList = selectedServices.length > 0 ? selectedServices : [urlService || 'Wash & Fold Laundry'];
+      const chosenServicesString = chosenServicesList.join(', ');
+
       const res = await createBooking({
-        serviceType: 'pickup',
+        serviceType: chosenServicesString,
+        service: chosenServicesString,
+        services: chosenServicesList,
+        total: 'To confirm',
         customerName: nameVal.formatted || name.trim(),
         phone: phoneVal.formatted || phone.trim(),
         address: fullAddress,
         preferredDate: date || 'Earliest available slot',
         preferredTimeSlot: time,
-        notes: `Services: ${selectedServices.join(', ')} | Garments: ${items || 'None'} | Approx Qty: ${quantity || 'None'} | Notes: ${notes || 'None'} | Contact: ${contact}`,
+        quantity: quantity.trim(),
+        items: items.trim(),
+        contactPreference: contact,
+        customerNotes: notes.trim(),
+        notes: notes.trim() || `Services: ${chosenServicesString}`,
         status: 'new',
       });
 
@@ -472,9 +510,17 @@ function OrderFormContent() {
                         (s) => isServiceMatch(s, srv.id) || isServiceMatch(s, srv.name)
                       );
                       return (
-                        <label
+                        <div
+                          role="button"
+                          tabIndex={0}
                           key={srv.id}
-                          onClick={() => toggleService(srv.id)}
+                          onClick={() => toggleService(srv.name || srv.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              toggleService(srv.name || srv.id);
+                            }
+                          }}
                           className={`relative flex items-start justify-between p-2 sm:p-2.5 rounded-xl border cursor-pointer transition-all select-none min-h-[62px] sm:min-h-[66px] ${
                             isChecked
                               ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-2 ring-[#008f51] shadow-xs'
@@ -502,7 +548,7 @@ function OrderFormContent() {
                           >
                             {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                           </div>
-                        </label>
+                        </div>
                       );
                     })
                   )}
@@ -539,22 +585,30 @@ function OrderFormContent() {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                      {selectedServices.map((srvId) => (
-                        <span
-                          key={srvId}
-                          className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-[#eaf8f1] text-[#006e3e] border border-[#a7f3d0] px-2.5 py-0.5 rounded-full shadow-2xs"
-                        >
-                          <span className="truncate max-w-[200px]">{srvId}</span>
-                          <button
-                            type="button"
-                            onClick={() => toggleService(srvId)}
-                            className="text-[#006e3e]/70 hover:text-rose-600 rounded-full hover:bg-rose-100 p-0.5 transition-colors cursor-pointer"
-                            title="Remove"
+                      {selectedServices.map((srvId) => {
+                        const disp = getServiceDisplay(srvId);
+                        return (
+                          <span
+                            key={srvId}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-[#eaf8f1] text-[#006e3e] border border-[#a7f3d0] px-2.5 py-0.5 rounded-full shadow-2xs"
                           >
-                            ✕
-                          </button>
-                        </span>
-                      ))}
+                            <span>{disp.title}</span>
+                            {disp.rate && (
+                              <span className="text-[9.5px] text-[#006e3e]/85 font-extrabold bg-white px-1.5 py-0.2 rounded border border-[#a7f3d0]/80">
+                                {disp.rate}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => toggleService(srvId)}
+                              className="text-[#006e3e]/70 hover:text-rose-600 rounded-full hover:bg-rose-100 p-0.5 transition-colors cursor-pointer ml-0.5"
+                              title="Remove"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
