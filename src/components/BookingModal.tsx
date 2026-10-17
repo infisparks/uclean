@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, CheckCircle, Calendar, Clock, MapPin, Phone, User, Send } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
@@ -32,6 +33,7 @@ export function BookingModal({
   prefilledItems = [],
   totalEstimate = 0,
 }: BookingModalProps) {
+  const router = useRouter();
   const [serviceType, setServiceType] = useState<'pickup' | 'home-visit' | 'vip-membership' | 'general-inquiry'>(
     defaultService
   );
@@ -123,12 +125,32 @@ export function BookingModal({
 
       if (res.success) {
         setSubmittedId(res.id);
+        const lastBookingData = {
+          bookingId: res.id,
+          name: nameVal.formatted || customerName.trim(),
+          phone: phoneVal.formatted || phone.trim(),
+          address: address.trim(),
+          selectedServices: [serviceType],
+          date: preferredDate,
+          time: preferredTimeSlot,
+          notes,
+          submittedAt: new Date().toISOString(),
+        };
+        try {
+          sessionStorage.setItem('uclean_last_booking', JSON.stringify(lastBookingData));
+          localStorage.setItem('uclean_last_booking', JSON.stringify(lastBookingData));
+        } catch (e) {
+          console.warn('Booking cache error:', e);
+        }
+
         confetti({
           particleCount: 80,
           spread: 70,
           origin: { y: 0.6 },
           colors: ['#008f51', '#d4af37', '#ffffff', '#ffd700'],
         });
+
+        router.push('/thankyou');
       }
     } catch (err) {
       console.error(err);

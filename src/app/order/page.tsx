@@ -291,6 +291,30 @@ function OrderFormContent() {
           console.warn('Failed to update localStorage profile on submit:', e);
         }
 
+        // Prepare last booking data for the /thankyou page
+        const lastBookingData = {
+          bookingId: res.id,
+          name: nameVal.formatted || name.trim(),
+          phone: phoneVal.formatted || phone.trim(),
+          building: building.trim(),
+          pin: pin.trim() || '400706',
+          address: addressVal.formatted || address.trim(),
+          selectedServices,
+          date: date || 'Earliest available',
+          time,
+          quantity: quantity.trim(),
+          items: items.trim(),
+          notes: notes.trim(),
+          submittedAt: new Date().toISOString(),
+        };
+
+        try {
+          sessionStorage.setItem('uclean_last_booking', JSON.stringify(lastBookingData));
+          localStorage.setItem('uclean_last_booking', JSON.stringify(lastBookingData));
+        } catch (e) {
+          console.warn('Failed to update booking cache:', e);
+        }
+
         setBookingId(res.id);
         confetti({
           particleCount: 110,
@@ -298,7 +322,9 @@ function OrderFormContent() {
           origin: { y: 0.5 },
           colors: ['#008f51', '#d4af37', '#ffffff', '#ffd700'],
         });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Navigate cleanly to /thankyou without any query parameters
+        router.push('/thankyou');
       }
     } catch (err) {
       console.error('Booking submission failed:', err);

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, Send, Sparkles, CheckCircle, ShieldCheck, AlertCircle, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createBooking } from '@/lib/firebase';
@@ -28,6 +29,7 @@ export function DetailedOrderFormModal({
   preselectedService,
   garmentName,
 }: DetailedOrderFormModalProps) {
+  const router = useRouter();
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -130,12 +132,34 @@ export function DetailedOrderFormModal({
 
       if (res.success) {
         setBookingId(res.id);
+        const lastBookingData = {
+          bookingId: res.id,
+          name: nameVal.formatted || name.trim(),
+          phone: phoneVal.formatted || phone.trim(),
+          address: fullAddress,
+          selectedServices,
+          date,
+          time,
+          quantity,
+          items,
+          notes,
+          submittedAt: new Date().toISOString(),
+        };
+        try {
+          sessionStorage.setItem('uclean_last_booking', JSON.stringify(lastBookingData));
+          localStorage.setItem('uclean_last_booking', JSON.stringify(lastBookingData));
+        } catch (e) {
+          console.warn('Booking cache error:', e);
+        }
+
         confetti({
           particleCount: 90,
           spread: 80,
           origin: { y: 0.6 },
           colors: ['#008f51', '#d4af37', '#ffffff', '#ffd700'],
         });
+
+        router.push('/thankyou');
       }
     } catch (err) {
       console.error(err);
