@@ -589,9 +589,9 @@ function OrderFormContent() {
                   </div>
                 )}
 
-                {/* Available Service Cards Grid (Scrollable: Cheap on top, higher pricing in scroll) */}
+                {/* Available Service Cards Grid (Scrollable: Most-used on top, heading & price only) */}
                 <div className="relative">
-                  <div className="max-h-[175px] sm:max-h-[195px] overflow-y-auto pr-1 -mr-1 scrollbar-thin scrollbar-thumb-[#DECBB0] scrollbar-track-transparent">
+                  <div className="max-h-[220px] sm:max-h-[250px] overflow-y-auto pr-1 -mr-1 scrollbar-thin scrollbar-thumb-[#DECBB0] scrollbar-track-transparent">
                     <div className="grid grid-cols-2 gap-2">
                       {filteredAvailableServices.length === 0 ? (
                         <div className="col-span-2 text-center py-6 px-3 bg-[#FAF6EE]/70 rounded-xl border border-dashed border-[#DECBB0]">
@@ -623,38 +623,26 @@ function OrderFormContent() {
                                   toggleService(srv.name || srv.id);
                                 }
                               }}
-                              className={`relative flex items-start justify-between p-2 sm:p-2.5 rounded-xl border cursor-pointer transition-all select-none min-h-[66px] sm:min-h-[72px] ${
+                              className={`relative flex items-center justify-between p-2 sm:p-2.5 rounded-xl border cursor-pointer transition-all select-none min-h-[52px] sm:min-h-[56px] ${
                                 isChecked
                                   ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-2 ring-[#008f51] shadow-xs'
                                   : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
                               }`}
                             >
-                              <div className="min-w-0 pr-1 flex items-start gap-1.5 sm:gap-2 flex-1">
-                                <span className="text-base sm:text-lg shrink-0 mt-0.5 leading-none">{srv.icon}</span>
+                              <div className="min-w-0 pr-1 flex items-center gap-1.5 sm:gap-2 flex-1">
+                                <span className="text-base sm:text-lg shrink-0 leading-none">{srv.icon}</span>
                                 <div className="min-w-0 flex-1">
-                                  <span className="block text-[11px] sm:text-[12px] font-bold text-[#072618] leading-[1.25] break-words">
+                                  <span className="block text-[11.5px] sm:text-[12.5px] font-bold text-[#072618] leading-tight line-clamp-1">
                                     {srv.name}
                                   </span>
-                                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                    <span className="block text-[9.5px] sm:text-[10.5px] font-extrabold text-[#00874c] leading-tight">
-                                      {srv.rate}
-                                    </span>
-                                    {srv.badge && (
-                                      <span className="inline-block text-[7.5px] sm:text-[8px] font-black px-1 py-0.2 rounded-md bg-[#e6f4ea] text-[#006e3e] border border-[#a7f3d0]">
-                                        {srv.badge}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {srv.subtitle && (
-                                    <span className="block text-[8px] sm:text-[9px] text-[#55695D] font-medium leading-tight mt-0.5 line-clamp-1">
-                                      {srv.subtitle}
-                                    </span>
-                                  )}
+                                  <span className="block text-[10px] sm:text-[11px] font-extrabold text-[#00874c] mt-0.5 leading-tight">
+                                    {srv.rate}
+                                  </span>
                                 </div>
                               </div>
 
                               <div
-                                className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border mt-0.5 ml-1 transition-all ${
+                                className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border ml-1 transition-all ${
                                   isChecked
                                     ? 'bg-gradient-to-br from-[#008f51] to-[#05a862] border-[#008f51] text-white shadow-xs'
                                     : 'bg-white border-[#DECBB0]'
@@ -668,11 +656,11 @@ function OrderFormContent() {
                       )}
                     </div>
                   </div>
-                  {/* Subtle hint to scroll for higher pricing items */}
+                  {/* Subtle hint to scroll for all items */}
                   <div className="flex items-center justify-between text-[10px] text-[#6B7280] font-medium pt-1 px-1">
-                    <span>Cheap daily wear on top</span>
+                    <span>Most used on top</span>
                     <span className="text-[#008f51] font-bold flex items-center gap-0.5">
-                      Scroll for Per-Kg &amp; more &darr;
+                      Scroll for all {filteredAvailableServices.length}+ items &darr;
                     </span>
                   </div>
                 </div>

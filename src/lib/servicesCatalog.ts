@@ -19,23 +19,85 @@ export function extractBasePrice(rateStr?: string): number {
   return match ? parseInt(match[1], 10) : 0;
 }
 
-// Helper: Check if service ID or Name matches target string flexibly
+// Helper: Check if service ID or Name matches target string accurately
 export function isServiceMatch(serviceIdOrName: string, target: string): boolean {
   if (!serviceIdOrName || !target) return false;
   const a = serviceIdOrName.toLowerCase().trim();
   const b = target.toLowerCase().trim();
   if (a === b) return true;
-  if (a.includes(b) || b.includes(a)) return true;
+
+  // Clean alphanumeric comparison
   const cleanA = a.replace(/[^a-z0-9]/g, '');
   const cleanB = b.replace(/[^a-z0-9]/g, '');
-  if (cleanA && cleanB && (cleanA.includes(cleanB) || cleanB.includes(cleanA))) return true;
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB) return true;
 
-  // Match key phrase tokens (e.g. "Home Textiles & Upholstery Care" matches "Home Textiles & Sofa Cleaning")
-  const tokensA = a.split(/[\s&,/–—\(\)]+/).filter((w) => w.length >= 4);
-  const tokensB = b.split(/[\s&,/–—\(\)]+/).filter((w) => w.length >= 4);
-  const overlap = tokensA.filter((w) => tokensB.includes(w));
-  if (overlap.length >= 2) return true;
-  if (overlap.length === 1 && (tokensA.length === 1 || tokensB.length === 1)) return true;
+  // Distinctive keywords that MUST NOT cross-match between different items
+  const distinctKeywords = [
+    'tshirt',
+    'tshirts',
+    'trouser',
+    'trousers',
+    'suit',
+    'suits',
+    'saree',
+    'sarees',
+    'lehenga',
+    'curtain',
+    'curtains',
+    'carpet',
+    'carpets',
+    'shoe',
+    'shoes',
+    'boot',
+    'boots',
+    'sofa',
+    'quilt',
+    'blanket',
+    'kambal',
+    'mattress',
+    'undergarment',
+    'undergarments',
+    'socks',
+    'iron',
+    'fold',
+    'press',
+    'jeans',
+    'kurti',
+    'kurtis',
+    'kurta',
+    'gym',
+    'activewear',
+    'towel',
+    'towels',
+    'blazer',
+    'jacket',
+    'leather',
+    'pashmina',
+    'shawl',
+    'comforter',
+    'chair',
+    'pillow',
+    'bedsheet',
+    'cushion',
+    'sherwani',
+    'gown',
+    'dohar',
+    'car',
+  ];
+  for (const kw of distinctKeywords) {
+    const inA = cleanA.includes(kw);
+    const inB = cleanB.includes(kw);
+    if (inA !== inB) {
+      // One has the distinctive keyword and the other doesn't, so they NEVER match!
+      return false;
+    }
+  }
+
+  // Exact substring match only if clean length is reasonably close (e.g. "washfold" in "washfoldlaundry")
+  if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+    return true;
+  }
 
   return false;
 }
@@ -187,279 +249,393 @@ export const PRIMARY_SERVICES: CatalogService[] = [
   },
 ];
 
-// 1.1 Category-Specific Service Collections with Human Psychology Pricing & Ranking (Cheap On Top)
+// 1.1 Category-Specific Service Collections with Human Psychology Pricing & Ranking (Most-used & Cheap On Top)
 export const WASH_FOLD_SERVICES: CatalogService[] = [
   {
-    id: 'Undergarments & Socks — from ₹19',
+    id: 'daily-tshirts-tops',
+    name: 'Daily T-Shirts & Polos',
+    icon: '👕',
+    rate: 'From ₹25',
+    category: 'Wash & Fold',
+    keywords: 'tshirts tshirt tops polos casual daily wear cotton wash and fold',
+    isPrimary: true,
+  },
+  {
+    id: 'office-shirts-trousers',
+    name: 'Office Shirts & Trousers',
+    icon: '👔',
+    rate: 'From ₹25',
+    category: 'Wash & Fold',
+    keywords: 'shirts trousers formal pants office regular wear wash and fold',
+    isPrimary: true,
+  },
+  {
+    id: 'undergarments-socks',
     name: 'Undergarments & Socks',
     icon: '🧦',
     rate: 'From ₹19',
     category: 'Wash & Fold',
     keywords: 'undergarments underwear socks innerwear vests handkerchiefs',
-    badge: '🧴 Lowest Price',
-    subtitle: 'Antibacterial hygienic wash',
     isPrimary: true,
   },
   {
-    id: 'Daily Wear (T-Shirts & Tops) — from ₹25',
-    name: 'Daily T-Shirts & Tops',
-    icon: '👕',
+    id: 'jeans-denims-shorts',
+    name: 'Jeans, Denims & Shorts',
+    icon: '👖',
+    rate: 'From ₹35',
+    category: 'Wash & Fold',
+    keywords: 'jeans denims shorts pants denim bermudas capris wash and fold',
+    isPrimary: true,
+  },
+  {
+    id: 'kurtis-daily-wear',
+    name: 'Kurtis & Daily Wear',
+    icon: '🥻',
+    rate: 'From ₹29',
+    category: 'Wash & Fold',
+    keywords: 'kurtis kurti salwar suit dupatta daily ethnic wash and fold',
+    isPrimary: true,
+  },
+  {
+    id: 'gym-activewear',
+    name: 'Gym Wear & Track Pants',
+    icon: '🏃',
     rate: 'From ₹25',
     category: 'Wash & Fold',
-    keywords: 'tshirts shirts tops polos casual daily wear cotton',
-    badge: '⚡ Most Worn Daily',
-    subtitle: 'Light wash & neat fold',
+    keywords: 'gym activewear track pants tights sports shorts jerseys wash and fold',
     isPrimary: true,
   },
   {
-    id: 'Office Shirts & Trousers — from ₹25',
-    name: 'Office Shirts & Trousers',
-    icon: '👔',
-    rate: 'From ₹25',
+    id: 'towels-pillow-covers',
+    name: 'Towels & Pillow Covers',
+    icon: '🧖',
+    rate: 'From ₹19',
     category: 'Wash & Fold',
-    keywords: 'shirts trousers formal pants jeans office regular wear',
-    badge: '💼 Daily Workwear',
-    subtitle: 'Wash with crisp charak press',
+    keywords: 'towels bath towel hand towel pillow covers napkins wash and fold',
     isPrimary: true,
   },
   {
-    id: 'Bedsheets, Linens & Towels — from ₹49',
-    name: 'Bedsheets & Bath Towels',
+    id: 'bedsheets-bath-towels',
+    name: 'Bedsheets & Bath Linen',
     icon: '🛏️',
     rate: 'From ₹49',
     category: 'Wash & Fold',
-    keywords: 'bedsheet bed cover pillow covers bath towels napkins linens',
-    badge: '🏠 Home Essentials',
-    subtitle: 'Fresh, soft & hygienic',
+    keywords: 'bedsheet bedsheets bed cover bath sheets linens wash and fold',
     isPrimary: true,
   },
   {
-    id: 'Wash & Fold Laundry',
+    id: 'dohar-light-blankets',
+    name: 'Dohar & Light Quilts',
+    icon: '🧶',
+    rate: 'From ₹79',
+    category: 'Wash & Fold',
+    keywords: 'dohar light blanket quilt cover summer dohar wash and fold',
+    isPrimary: true,
+  },
+  {
+    id: 'wash-fold-laundry',
     name: 'Wash & Fold Laundry',
     icon: '🧺',
     rate: '₹109/kg',
     category: 'Wash & Fold',
-    keywords: 'wash fold laundry kg everyday clothes regular tshirts shirts pants shorts',
-    badge: '🔥 Most Popular (Per Kg)',
-    subtitle: '~5-6 daily clothes/kg (approx ₹18/cloth)',
+    keywords: 'wash fold laundry kg everyday clothes regular per kg weight bulk',
     isPrimary: true,
   },
   {
-    id: 'Wash & Steam Iron',
+    id: 'wash-steam-iron',
     name: 'Wash & Steam Iron',
     icon: '✨',
     rate: '₹149/kg',
     category: 'Wash & Fold',
-    keywords: 'wash iron steam pressed laundry kg shirts trousers formals',
-    badge: '⭐ Ready-to-Wear',
-    subtitle: 'Washed, ironed & folded',
+    keywords: 'wash iron steam pressed laundry kg shirts trousers formals bulk',
     isPrimary: true,
   },
 ];
 
 export const WASH_IRON_SERVICES: CatalogService[] = [
   {
-    id: 'Wash & Steam Iron',
-    name: 'Wash & Steam Iron',
+    id: 'office-shirts-press',
+    name: 'Office Shirts Press',
     icon: '👔',
-    rate: '₹149/kg',
-    category: 'Wash & Iron',
-    keywords: 'wash iron steam pressed laundry kg shirts trousers formals',
-    badge: '🔥 Best Value',
-    subtitle: 'Wash + steam press by kg',
-    isPrimary: true,
-  },
-  {
-    id: 'Steam Press Only — from ₹25',
-    name: 'Steam Ironing (Charak)',
-    icon: '💨',
     rate: 'From ₹25',
     category: 'Wash & Iron',
-    keywords: 'steam press iron charak creasing wrinkle free shirts pants',
-    badge: '⚡ Wrinkle-Free',
-    subtitle: 'Sharp professional creases',
+    keywords: 'shirts formal shirts office steam press charak creasing',
     isPrimary: true,
   },
   {
-    id: 'Office Shirts & Trousers — from ₹25',
-    name: 'Shirts & Trousers Press',
+    id: 'trousers-pants-press',
+    name: 'Trousers & Pants Press',
+    icon: '👖',
+    rate: 'From ₹25',
+    category: 'Wash & Iron',
+    keywords: 'trousers pants formals chinos creasing steam press',
+    isPrimary: true,
+  },
+  {
+    id: 'daily-tshirts-press',
+    name: 'T-Shirts & Polos Press',
     icon: '👕',
     rate: 'From ₹25',
     category: 'Wash & Iron',
-    keywords: 'shirts trousers pants daily office press',
-    badge: '💼 Daily Workwear',
-    subtitle: 'Crisp hanger or fold',
+    keywords: 'tshirts polo casual wear steam press wrinkle free',
     isPrimary: true,
   },
   {
-    id: 'Wash & Fold Laundry',
-    name: 'Wash & Fold Laundry',
-    icon: '🧺',
-    rate: '₹109/kg',
+    id: 'jeans-denims-press',
+    name: 'Jeans & Denims Press',
+    icon: '👖',
+    rate: 'From ₹30',
     category: 'Wash & Iron',
-    keywords: 'wash fold laundry kg regular clothes',
-    badge: '🧺 Economy Option',
-    subtitle: 'Clean everyday laundry',
+    keywords: 'jeans denims heavy press wrinkle free pants',
     isPrimary: true,
   },
   {
-    id: 'Saree & Kurta Steam Press — from ₹49',
-    name: 'Sarees & Kurta Press',
+    id: 'kurti-salwar-press',
+    name: 'Kurti & Salwar Press',
     icon: '🥻',
+    rate: 'From ₹35',
+    category: 'Wash & Iron',
+    keywords: 'kurti salwar ladies suit daily ethnic steam press',
+    isPrimary: true,
+  },
+  {
+    id: 'saree-kurta-press',
+    name: 'Sarees & Kurta Press',
+    icon: '✨',
     rate: 'From ₹49',
     category: 'Wash & Iron',
-    keywords: 'saree kurta pajama steam press ethnic silk roll press',
-    badge: '✨ Roll Press',
-    subtitle: 'Gentle fabric care',
+    keywords: 'saree kurta pajama roll press steam iron ethnic silk',
     isPrimary: true,
   },
   {
-    id: 'Blazer & Coat Steam Press — from ₹99',
+    id: 'bedsheets-linens-press',
+    name: 'Bedsheets & Linens Press',
+    icon: '🛏️',
+    rate: 'From ₹49',
+    category: 'Wash & Iron',
+    keywords: 'bedsheet bedsheets linens pillow covers flat steam iron',
+    isPrimary: true,
+  },
+  {
+    id: 'blazer-coat-press',
     name: 'Blazer & Coat Press',
     icon: '🧥',
     rate: 'From ₹99',
     category: 'Wash & Iron',
-    keywords: 'blazer suit jacket coat steam press formals',
-    badge: '👔 Executive Formals',
-    subtitle: '3D mannequin steam finish',
+    keywords: 'blazer suit coat jacket 3d mannequin steam finish formals',
+    isPrimary: true,
+  },
+  {
+    id: 'two-piece-suit-press',
+    name: 'Two-Piece Suit Press',
+    icon: '🤵',
+    rate: 'From ₹149',
+    category: 'Wash & Iron',
+    keywords: 'suit 2 piece executive formals suit press steam iron',
+    isPrimary: true,
+  },
+  {
+    id: 'wash-iron-kg',
+    name: 'Wash & Steam Iron',
+    icon: '👔',
+    rate: '₹149/kg',
+    category: 'Wash & Iron',
+    keywords: 'wash iron steam pressed laundry kg bulk weight',
+    isPrimary: true,
+  },
+  {
+    id: 'wash-fold-kg',
+    name: 'Wash & Fold Laundry',
+    icon: '🧺',
+    rate: '₹109/kg',
+    category: 'Wash & Iron',
+    keywords: 'wash fold laundry kg everyday clothes regular per kg',
     isPrimary: true,
   },
 ];
 
 export const DRY_CLEANING_SERVICES: CatalogService[] = [
   {
-    id: "Men's Suits & Ethnic",
-    name: "Men's Suits & Ethnic",
+    id: 'dc-shirts-trousers',
+    name: 'Office Shirts & Trousers',
     icon: '👔',
-    rate: 'From ₹119/item',
+    rate: 'From ₹69',
     category: 'Dry Cleaning',
-    keywords: 'men suits blazer ethnic sherwani tuxedo kurta dhoti coat',
-    badge: '⭐ Executive Care',
-    subtitle: 'Solvent dry clean & steam form',
+    keywords: 'shirts trousers formal workwear dry cleaning spot removal',
     isPrimary: true,
   },
   {
-    id: "Women's Ethnic & Saree Spa",
-    name: "Women's Ethnic & Saree",
+    id: 'dc-silk-saree',
+    name: 'Silk Sarees & Saree Spa',
     icon: '🥻',
-    rate: 'From ₹69/item',
+    rate: 'From ₹119',
     category: 'Dry Cleaning',
-    keywords: 'women ethnic saree spa lehenga choli silk banarasi dupatta',
-    badge: '🥻 Silk & Zari Safe',
-    subtitle: 'Color-preserving gentle spa',
+    keywords: 'saree silk banarasi zari paithani kanjivaram chiffon dry cleaning',
     isPrimary: true,
   },
   {
-    id: 'Winterwear & Leather Care',
-    name: 'Winterwear & Jackets',
+    id: 'dc-mens-suit',
+    name: "Men's Suits & Blazers",
+    icon: '🤵',
+    rate: 'From ₹149',
+    category: 'Dry Cleaning',
+    keywords: 'suit suits blazer coat tuxedo indowestern formals dry clean',
+    isPrimary: true,
+  },
+  {
+    id: 'dc-kurta-sherwani',
+    name: 'Kurta Pajama & Sherwani',
+    icon: '👑',
+    rate: 'From ₹119',
+    category: 'Dry Cleaning',
+    keywords: 'kurta pyjama pajama sherwani dhoti ethnic wedding groom dry cleaning',
+    isPrimary: true,
+  },
+  {
+    id: 'dc-winter-jacket',
+    name: 'Jackets & Winterwear',
     icon: '🧥',
-    rate: 'From ₹99/item',
+    rate: 'From ₹99',
     category: 'Dry Cleaning',
-    keywords: 'winterwear leather jacket coat sweater cardigan puffer fur',
-    badge: '🧥 Deep De-pilling',
-    subtitle: 'Odor & lint removal',
+    keywords: 'jacket jackets winterwear sweaters cardigans coats overcoats',
     isPrimary: true,
   },
   {
-    id: 'Designer Gowns & Dresses — from ₹299',
+    id: 'dc-designer-gown',
     name: 'Designer Gowns & Dresses',
-    icon: '✨',
-    rate: 'From ₹299',
+    icon: '💃',
+    rate: 'From ₹199',
     category: 'Dry Cleaning',
-    keywords: 'gown dress western maxi party evening wear cocktail dress',
-    badge: '💃 Delicate Beaded',
-    subtitle: 'Embellishment protection',
+    keywords: 'gown dress western maxi party evening wear cocktail dress dry cleaning',
     isPrimary: true,
   },
   {
-    id: 'Footwear & Designer Shoe Spa',
-    name: 'Footwear & Shoe Spa',
+    id: 'dc-bridal-lehenga',
+    name: 'Bridal & Heavy Lehenga',
+    icon: '✨',
+    rate: 'From ₹499',
+    category: 'Dry Cleaning',
+    keywords: 'lehenga choli bridal wedding ghagra heavy stone zari work dry clean',
+    isPrimary: true,
+  },
+  {
+    id: 'dc-shawl-pashmina',
+    name: 'Shawls & Pashmina Spa',
+    icon: '🧣',
+    rate: 'From ₹99',
+    category: 'Dry Cleaning',
+    keywords: 'shawl pashmina toosh lohi muffler woolen cashmere scarf stoles',
+    isPrimary: true,
+  },
+  {
+    id: 'dc-footwear-sneaker',
+    name: 'Footwear & Sneaker Spa',
     icon: '👟',
     rate: 'From ₹349/pair',
     category: 'Dry Cleaning',
-    keywords: 'shoe sneakers boots leather footwear spa sports white shoes',
-    badge: '👟 Soles & Upper Restored',
-    subtitle: 'Deep cleaning & deodorizing',
+    keywords: 'shoe sneakers boots leather footwear spa sports white shoes restoration',
     isPrimary: true,
   },
   {
-    id: 'Shawls, Pashmina & Ties',
-    name: 'Shawls & Pashmina Spa',
-    icon: '🧣',
-    rate: 'From ₹25/item',
+    id: 'dc-leather-jacket-bag',
+    name: 'Leather Jackets & Bags',
+    icon: '👜',
+    rate: 'From ₹299',
     category: 'Dry Cleaning',
-    keywords: 'shawl pashmina toosh lohi muffler woolen cashmere scarf tie',
-    badge: '🧣 Pure Cashmere Safe',
-    subtitle: 'Soft conditioning cycle',
+    keywords: 'leather jacket suede handbag purse briefcase restoration conditioning',
     isPrimary: true,
   },
 ];
 
 export const HOME_TEXTILES_SERVICES: CatalogService[] = [
   {
-    id: 'Lining Curtain — ₹45/sq. ft.',
+    id: 'ht-bedsheets-linens',
+    name: 'Bedsheets & Pillow Covers',
+    icon: '🛏️',
+    rate: 'From ₹49',
+    category: 'Home Textiles',
+    keywords: 'bedsheet bedsheets linens pillow covers bed cover fresh finish',
+    isPrimary: true,
+  },
+  {
+    id: 'ht-curtains-parda',
     name: 'Curtains & Drapes (Parda)',
     icon: '🪟',
     rate: 'From ₹45/sq.ft',
     category: 'Home Textiles',
-    keywords: 'curtain parda drape window door sheer lining blackout fabric',
-    badge: '🪟 Free Unhook & Hang',
-    subtitle: 'Dust & allergen deep removal',
+    keywords: 'curtain parda drape window sheer blackout lining dust extraction',
     isPrimary: true,
   },
   {
-    id: 'Carpet & Rug Rotary Shampooing — ₹30/sq.ft',
-    name: 'Carpet & Rug Washing',
-    icon: '🧼',
-    rate: 'From ₹30/sq.ft',
+    id: 'ht-blankets-kambal',
+    name: 'Blankets & Heavy Kambal',
+    icon: '🧶',
+    rate: 'From ₹199',
     category: 'Home Textiles',
-    keywords: 'carpet rug floor mat kashmiri rotary shampoo deep suction',
-    badge: '🧼 Rotary Injection',
-    subtitle: 'Stain extraction & quick dry',
+    keywords: 'blanket kambal duvet comforter heavy winter rajai mink fluffing',
     isPrimary: true,
   },
   {
-    id: 'Home Textiles & Sofa Cleaning',
+    id: 'ht-quilts-comforters',
+    name: 'Quilts & Comforters (Rajai)',
+    icon: '🛌',
+    rate: 'From ₹199',
+    category: 'Home Textiles',
+    keywords: 'quilt comforter rajai duvet summer ac quilt hygienic wash',
+    isPrimary: true,
+  },
+  {
+    id: 'ht-sofa-cleaning',
     name: 'Sofa & Upholstery Care',
     icon: '🛋️',
     rate: 'From ₹199/seat',
     category: 'Home Textiles',
-    keywords: 'sofa couch carpet upholstery shampoo rug cushion living room',
-    badge: '🛋️ Foam Deep Clean',
-    subtitle: 'Fabric & leather upholstery',
+    keywords: 'sofa couch upholstery shampoo rug cushion living room foam deep clean',
     isPrimary: true,
   },
   {
-    id: 'Heavy Blankets & Kambal Washing — from ₹249',
-    name: 'Blankets & Heavy Kambal',
-    icon: '🧶',
-    rate: 'From ₹249',
+    id: 'ht-carpet-rugs',
+    name: 'Carpet & Rug Washing',
+    icon: '🧼',
+    rate: 'From ₹30/sq.ft',
     category: 'Home Textiles',
-    keywords: 'blanket kambal duvet comforter heavy winter rajai mink',
-    badge: '🧶 100% Germ-Free',
-    subtitle: 'Fluffing & hygienic sanitize',
+    keywords: 'carpet rug floor mat rotary shampoo deep suction stain removal',
     isPrimary: true,
   },
   {
-    id: 'Mattress & Quilt Steam Sanitization — from ₹199',
-    name: 'Mattress & Quilt Sanitization',
+    id: 'ht-mattress-sanitization',
+    name: 'Mattress Steam Sanitization',
     icon: '🛏️',
     rate: 'From ₹199',
     category: 'Home Textiles',
-    keywords: 'mattress quilt pillow steam sanitization anti allergen bed bug bacteria',
-    badge: '🛏️ Anti-Dust Mite',
-    subtitle: 'High-temperature steam kill',
+    keywords: 'mattress steam sanitization anti allergen bed bug bacteria high temp',
     isPrimary: true,
   },
   {
-    id: 'Bedsheets, Linens & Towels — from ₹49',
-    name: 'Bedsheets & Pillow Covers',
-    icon: '🏠',
-    rate: 'From ₹49',
+    id: 'ht-cushions-pillows',
+    name: 'Cushions & Pillow Care',
+    icon: '🛋️',
+    rate: 'From ₹69',
     category: 'Home Textiles',
-    keywords: 'bedsheet linens bed cover pillow bath towel',
-    badge: '✨ Crisp & Clean',
-    subtitle: 'Fresh fragrant finish',
+    keywords: 'cushion cushions pillow pillows sofa cushions wash re fluff',
+    isPrimary: true,
+  },
+  {
+    id: 'ht-dining-chair',
+    name: 'Dining Chair Shampoo',
+    icon: '🪑',
+    rate: 'From ₹99/seat',
+    category: 'Home Textiles',
+    keywords: 'dining chair ottoman upholstery shampoo fabric seat deep wash',
+    isPrimary: true,
+  },
+  {
+    id: 'ht-car-upholstery',
+    name: 'Car Upholstery Cleaning',
+    icon: '🚗',
+    rate: 'From ₹499',
+    category: 'Home Textiles',
+    keywords: 'car interior upholstery seats floor mats interior deep clean',
     isPrimary: true,
   },
 ];
@@ -652,33 +828,31 @@ const GARMENT_SERVICES: CatalogService[] = RATE_ITEMS.map((item: RateItem) => {
   };
 });
 
-// Master Full Catalog (Combining Primary, Specialized Categories, and Individual Garments without duplicates)
+// Master Full Catalog (Combining Primary, Category Services, Specialized, and Individual Garments without duplicates)
 const existingIds = new Set<string>();
 export const ALL_SERVICES_CATALOG: CatalogService[] = [];
 
-// Add Primary first
-for (const item of PRIMARY_SERVICES) {
-  if (!existingIds.has(item.id)) {
-    existingIds.add(item.id);
-    ALL_SERVICES_CATALOG.push(item);
+const pushUnique = (items: CatalogService[]) => {
+  for (const item of items) {
+    if (!existingIds.has(item.id)) {
+      existingIds.add(item.id);
+      ALL_SERVICES_CATALOG.push(item);
+    }
   }
-}
+};
 
-// Add Specialized second
-for (const item of SPECIALIZED_SERVICES) {
-  if (!existingIds.has(item.id)) {
-    existingIds.add(item.id);
-    ALL_SERVICES_CATALOG.push(item);
-  }
-}
+// Add Primary and Category collections first
+pushUnique(PRIMARY_SERVICES);
+pushUnique(WASH_FOLD_SERVICES);
+pushUnique(WASH_IRON_SERVICES);
+pushUnique(DRY_CLEANING_SERVICES);
+pushUnique(HOME_TEXTILES_SERVICES);
 
-// Add Garments third
-for (const item of GARMENT_SERVICES) {
-  if (!existingIds.has(item.id)) {
-    existingIds.add(item.id);
-    ALL_SERVICES_CATALOG.push(item);
-  }
-}
+// Add Specialized next
+pushUnique(SPECIALIZED_SERVICES);
+
+// Add Garments last
+pushUnique(GARMENT_SERVICES);
 
 // Category filter tabs for the modal
 export const CATALOG_CATEGORIES = [
