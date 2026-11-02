@@ -35,6 +35,11 @@ import {
 import {
   PRIMARY_SERVICES,
   ALL_SERVICES_CATALOG,
+  ORDER_CATEGORIES,
+  WASH_FOLD_SERVICES,
+  WASH_IRON_SERVICES,
+  DRY_CLEANING_SERVICES,
+  HOME_TEXTILES_SERVICES,
   searchCatalog,
   CatalogService,
   isServiceMatch,
@@ -126,64 +131,48 @@ function OrderFormContent() {
     }
   }, [isStorageLoaded, name, phone, building, pin, address]);
 
-  // Selected services are always positioned at Card 1 (top of the grid) so users can see them,
-  // view their prices, unselect them, or select other services seamlessly!
+  const [activeCategoryTab, setActiveCategoryTab] = useState<string>('wash-fold');
+
+  // Available services list sorted with cheap on top, higher pricing in scroll
   const filteredAvailableServices = React.useMemo(() => {
     const raw = serviceSearch.toLowerCase().trim();
     if (raw) return searchCatalog(raw, 'All');
 
-    // 1. Gather all currently selected services and convert them to CatalogService items for position 1..N
-    const selectedCatalogItems: CatalogService[] = [];
-    for (const sel of selectedServices) {
-      const match =
-        PRIMARY_SERVICES.find((s) => isServiceMatch(s.id, sel) || isServiceMatch(s.name, sel)) ||
-        ALL_SERVICES_CATALOG.find((s) => isServiceMatch(s.id, sel) || isServiceMatch(s.name, sel));
-
-      if (match) {
-        if (!selectedCatalogItems.some((item) => isServiceMatch(item.id, match.id) || isServiceMatch(item.name, match.name))) {
-          selectedCatalogItems.push({
-            ...match,
-            name: sel || match.name,
-          });
-        }
-      } else {
-        const disp = getServiceDisplay(sel);
-        selectedCatalogItems.push({
-          id: sel,
-          name: disp.title || sel,
-          icon: disp.icon || '🧺',
-          rate: disp.rate || 'Standard Rate',
-          category: 'Selected',
-          keywords: sel.toLowerCase(),
-          isPrimary: true,
-        });
-      }
+    // Determine the base services collection for the active category (cheap on top)
+    let categoryBaseServices: CatalogService[] = WASH_FOLD_SERVICES;
+    if (activeCategoryTab === 'wash-iron') {
+      categoryBaseServices = WASH_IRON_SERVICES;
+    } else if (activeCategoryTab === 'dry-cleaning') {
+      categoryBaseServices = DRY_CLEANING_SERVICES;
+    } else if (activeCategoryTab === 'home-textiles') {
+      categoryBaseServices = HOME_TEXTILES_SERVICES;
     }
 
-    // 2. Filter remaining PRIMARY_SERVICES so they don't duplicate
-    const remainingPrimary = PRIMARY_SERVICES.filter(
-      (p) => !selectedCatalogItems.some((sel) => isServiceMatch(p.id, sel.id) || isServiceMatch(p.name, sel.name))
-    );
-
-    // Selected items ALWAYS appear first (Card 1, etc.), followed by the rest
-    return [...selectedCatalogItems, ...remainingPrimary];
-  }, [serviceSearch, selectedServices]);
+    return categoryBaseServices;
+  }, [serviceSearch, activeCategoryTab]);
 
   useEffect(() => {
     if (urlService) {
-      const parsed = urlService
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (parsed.length > 0) {
-        setSelectedServices(parsed);
+      const incoming = urlService.toLowerCase().trim();
+      // Auto-select the matching category tab based on incoming service
+      if (incoming.includes('wash & fold') || incoming.includes('wash and fold') || incoming.includes('fold')) {
+        setActiveCategoryTab('wash-fold');
+      } else if (incoming.includes('iron') || incoming.includes('steam press')) {
+        setActiveCategoryTab('wash-iron');
+      } else if (incoming.includes('dry clean')) {
+        setActiveCategoryTab('dry-cleaning');
+      } else if (incoming.includes('textile') || incoming.includes('sofa') || incoming.includes('curtain') || incoming.includes('carpet')) {
+        setActiveCategoryTab('home-textiles');
       }
-    } else {
-      setSelectedServices([]);
     }
+
+    // Do NOT keep anything selected by default! User must choose what to select.
+    setSelectedServices([]);
 
     if (urlGarment) {
       setItems(urlGarment);
+    } else {
+      setItems('');
     }
   }, [urlService, urlGarment]);
 
@@ -575,69 +564,116 @@ function OrderFormContent() {
                   </div>
                 )}
 
-                {/* Available Service Cards Grid */}
-                <div className="grid grid-cols-2 gap-2">
-                  {filteredAvailableServices.length === 0 ? (
-                    <div className="col-span-2 text-center py-6 px-3 bg-[#FAF6EE]/70 rounded-xl border border-dashed border-[#DECBB0]">
-                      <p className="text-xs font-semibold text-[#111827]">
-                        No service matching &ldquo;{serviceSearch}&rdquo;
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setIsServicesModalOpen(true)}
-                        className="mt-2 text-xs font-bold text-[#008f51] underline cursor-pointer"
-                      >
-                        Browse all 100+ services in popup &rarr;
-                      </button>
-                    </div>
-                  ) : (
-                    filteredAvailableServices.slice(0, serviceSearch ? 20 : 6).map((srv) => {
-                      const isChecked = selectedServices.some(
-                        (s) => isServiceMatch(s, srv.id) || isServiceMatch(s, srv.name)
-                      );
+                {/* Category Pills Filter Bar */}
+                {!serviceSearch.trim() && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-none -mx-1 px-1">
+                    {ORDER_CATEGORIES.map((cat) => {
+                      const isActive = activeCategoryTab === cat.id;
                       return (
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          key={srv.id}
-                          onClick={() => toggleService(srv.name || srv.id)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              toggleService(srv.name || srv.id);
-                            }
-                          }}
-                          className={`relative flex items-start justify-between p-2 sm:p-2.5 rounded-xl border cursor-pointer transition-all select-none min-h-[62px] sm:min-h-[66px] ${
-                            isChecked
-                              ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-2 ring-[#008f51] shadow-xs'
-                              : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setActiveCategoryTab(cat.id)}
+                          className={`shrink-0 px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-[#008f51] text-white shadow-xs'
+                              : 'bg-[#FAF6EE] text-[#4A5D52] hover:bg-[#ECE0C6] border border-[#DECBB0]/70'
                           }`}
                         >
-                          <div className="min-w-0 pr-1 flex items-start gap-1.5 sm:gap-2 flex-1">
-                            <span className="text-base sm:text-lg shrink-0 mt-0.5 leading-none">{srv.icon}</span>
-                            <div className="min-w-0 flex-1">
-                              <span className="block text-[11px] sm:text-[12px] font-bold text-[#072618] leading-[1.25] break-words">
-                                {srv.name}
-                              </span>
-                              <span className="block text-[9.5px] sm:text-[10.5px] font-extrabold text-[#00874c] mt-0.5 leading-tight">
-                                {srv.rate}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div
-                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border mt-0.5 ml-1 transition-all ${
-                              isChecked
-                                ? 'bg-gradient-to-br from-[#008f51] to-[#05a862] border-[#008f51] text-white shadow-xs'
-                                : 'bg-white border-[#DECBB0]'
-                            }`}
-                          >
-                            {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                          </div>
-                        </div>
+                          <span>{cat.icon}</span>
+                          <span>{cat.label}</span>
+                        </button>
                       );
-                    })
-                  )}
+                    })}
+                  </div>
+                )}
+
+                {/* Available Service Cards Grid (Scrollable: Cheap on top, higher pricing in scroll) */}
+                <div className="relative">
+                  <div className="max-h-[175px] sm:max-h-[195px] overflow-y-auto pr-1 -mr-1 scrollbar-thin scrollbar-thumb-[#DECBB0] scrollbar-track-transparent">
+                    <div className="grid grid-cols-2 gap-2">
+                      {filteredAvailableServices.length === 0 ? (
+                        <div className="col-span-2 text-center py-6 px-3 bg-[#FAF6EE]/70 rounded-xl border border-dashed border-[#DECBB0]">
+                          <p className="text-xs font-semibold text-[#111827]">
+                            No service matching &ldquo;{serviceSearch}&rdquo;
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setIsServicesModalOpen(true)}
+                            className="mt-2 text-xs font-bold text-[#008f51] underline cursor-pointer"
+                          >
+                            Browse all 100+ services in popup &rarr;
+                          </button>
+                        </div>
+                      ) : (
+                        filteredAvailableServices.map((srv) => {
+                          const isChecked = selectedServices.some(
+                            (s) => isServiceMatch(s, srv.id) || isServiceMatch(s, srv.name)
+                          );
+                          return (
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              key={srv.id}
+                              onClick={() => toggleService(srv.name || srv.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  toggleService(srv.name || srv.id);
+                                }
+                              }}
+                              className={`relative flex items-start justify-between p-2 sm:p-2.5 rounded-xl border cursor-pointer transition-all select-none min-h-[66px] sm:min-h-[72px] ${
+                                isChecked
+                                  ? 'bg-gradient-to-br from-[#eaf9f1] to-[#d1fae5]/70 border-[#008f51] ring-2 ring-[#008f51] shadow-xs'
+                                  : 'bg-gradient-to-br from-white to-[#FAF6EE]/60 border-[#DECBB0] hover:border-[#008f51]/60 hover:shadow-2xs'
+                              }`}
+                            >
+                              <div className="min-w-0 pr-1 flex items-start gap-1.5 sm:gap-2 flex-1">
+                                <span className="text-base sm:text-lg shrink-0 mt-0.5 leading-none">{srv.icon}</span>
+                                <div className="min-w-0 flex-1">
+                                  <span className="block text-[11px] sm:text-[12px] font-bold text-[#072618] leading-[1.25] break-words">
+                                    {srv.name}
+                                  </span>
+                                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                    <span className="block text-[9.5px] sm:text-[10.5px] font-extrabold text-[#00874c] leading-tight">
+                                      {srv.rate}
+                                    </span>
+                                    {srv.badge && (
+                                      <span className="inline-block text-[7.5px] sm:text-[8px] font-black px-1 py-0.2 rounded-md bg-[#e6f4ea] text-[#006e3e] border border-[#a7f3d0]">
+                                        {srv.badge}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {srv.subtitle && (
+                                    <span className="block text-[8px] sm:text-[9px] text-[#55695D] font-medium leading-tight mt-0.5 line-clamp-1">
+                                      {srv.subtitle}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div
+                                className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border mt-0.5 ml-1 transition-all ${
+                                  isChecked
+                                    ? 'bg-gradient-to-br from-[#008f51] to-[#05a862] border-[#008f51] text-white shadow-xs'
+                                    : 'bg-white border-[#DECBB0]'
+                                }`}
+                              >
+                                {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                  {/* Subtle hint to scroll for higher pricing items */}
+                  <div className="flex items-center justify-between text-[10px] text-[#6B7280] font-medium pt-1 px-1">
+                    <span>Cheap daily wear on top</span>
+                    <span className="text-[#008f51] font-bold flex items-center gap-0.5">
+                      Scroll for Per-Kg &amp; more &darr;
+                    </span>
+                  </div>
                 </div>
 
                 {/* View More Services Button to open popup modal */}
@@ -909,6 +945,26 @@ function OrderFormContent() {
                         onChange={(e) => setItems(e.target.value)}
                         className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                       />
+                    </div>
+                    {/* Quick 1-tap chips for everyday garments */}
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {['Daily T-Shirts', 'Shirts & Pants', 'Jeans & Shorts', 'Towels & Linens', 'Undergarments'].map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => {
+                            setItems((prev) => {
+                              const cleaned = prev ? prev.trim() : '';
+                              if (!cleaned) return chip;
+                              if (cleaned.toLowerCase().includes(chip.toLowerCase())) return cleaned;
+                              return `${cleaned}, ${chip}`;
+                            });
+                          }}
+                          className="px-1.5 py-0.5 rounded-md bg-[#FAF6EE] border border-[#DECBB0] text-[9.5px] font-medium text-[#4A5D52] hover:bg-[#e6f4ea] hover:text-[#008f51] hover:border-[#008f51] transition-colors cursor-pointer"
+                        >
+                          + {chip}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

@@ -29,10 +29,10 @@ export function CoreLaundrySection({
   };
 
   const handleRateClick = () => {
-    if (onCheckGarmentPrice) {
+    if (onSelectService) {
+      onSelectService('Dry Cleaning', '');
+    } else if (onCheckGarmentPrice) {
       onCheckGarmentPrice();
-    } else if (onSelectService) {
-      onSelectService('Dry Cleaning (Per Piece)', 'Garment Dry Clean');
     } else if (onOpenBooking) {
       onOpenBooking('Dry Cleaning');
     }
@@ -54,7 +54,7 @@ export function CoreLaundrySection({
       <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
         {/* Card 1: Wash & Fold */}
         <div
-          onClick={() => handleSelect('Wash & Fold', 'Everyday Laundry (Per Kg)')}
+          onClick={() => handleSelect('Wash & Fold Laundry', '')}
           className="bg-white rounded-2xl p-3 sm:p-4 border border-[#E5ECE7] hover:border-[#008f51] shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between min-h-[160px] sm:min-h-[175px] cursor-pointer group active:scale-[0.99]"
         >
           <div>
@@ -84,7 +84,7 @@ export function CoreLaundrySection({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleSelect('Wash & Fold', 'Everyday Laundry (Per Kg)');
+                handleSelect('Wash & Fold Laundry', '');
               }}
               className="btn-splash-shine group/btn w-full h-8 sm:h-8.5 px-2 rounded-xl bg-gradient-to-r from-[#005e34] via-[#009252] to-[#014d2b] hover:from-[#004d2c] hover:via-[#008f51] hover:to-[#004225] text-white font-heading font-black text-[9.5px] sm:text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1 sm:gap-1.5 border border-[#34d399]/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_3px_10px_rgba(0,143,81,0.28)] hover:shadow-[0_4px_16px_rgba(0,143,81,0.48)] active:scale-95 transition-all cursor-pointer"
             >
@@ -96,7 +96,7 @@ export function CoreLaundrySection({
 
         {/* Card 2: Wash & Iron */}
         <div
-          onClick={() => handleSelect('Wash & Steam Iron', 'Steam Pressed Laundry')}
+          onClick={() => handleSelect('Wash & Steam Iron', '')}
           className="bg-white rounded-2xl p-3 sm:p-4 border border-[#E5ECE7] hover:border-[#008f51] shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between min-h-[160px] sm:min-h-[175px] cursor-pointer group active:scale-[0.99]"
         >
           <div>
@@ -126,7 +126,7 @@ export function CoreLaundrySection({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleSelect('Wash & Steam Iron', 'Steam Pressed Laundry');
+                handleSelect('Wash & Steam Iron', '');
               }}
               className="btn-splash-shine group/btn w-full h-8 sm:h-8.5 px-2 rounded-xl bg-gradient-to-r from-[#005e34] via-[#009252] to-[#014d2b] hover:from-[#004d2c] hover:via-[#008f51] hover:to-[#004225] text-white font-heading font-black text-[9.5px] sm:text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1 sm:gap-1.5 border border-[#34d399]/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_3px_10px_rgba(0,143,81,0.28)] hover:shadow-[0_4px_16px_rgba(0,143,81,0.48)] active:scale-95 transition-all cursor-pointer"
             >
@@ -180,7 +180,7 @@ export function CoreLaundrySection({
 
         {/* Card 4: Home Textiles */}
         <div
-          onClick={() => handleSelect('Home Textiles & Upholstery Care', 'Carpets & Lining Curtains')}
+          onClick={() => handleSelect('Home Textiles', '')}
           className="bg-white rounded-2xl p-3 sm:p-4 border border-[#E5ECE7] hover:border-[#008f51] shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between min-h-[160px] sm:min-h-[175px] cursor-pointer group active:scale-[0.99]"
         >
           <div>
@@ -210,7 +210,7 @@ export function CoreLaundrySection({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleSelect('Home Textiles & Upholstery Care', 'Carpets & Lining Curtains');
+                handleSelect('Home Textiles', '');
               }}
               className="btn-splash-shine group/btn w-full h-8 sm:h-8.5 px-2 rounded-xl bg-gradient-to-r from-[#005e34] via-[#009252] to-[#014d2b] hover:from-[#004d2c] hover:via-[#008f51] hover:to-[#004225] text-white font-heading font-black text-[9.5px] sm:text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1 sm:gap-1.5 border border-[#34d399]/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_3px_10px_rgba(0,143,81,0.28)] hover:shadow-[0_4px_16px_rgba(0,143,81,0.48)] active:scale-95 transition-all cursor-pointer"
             >

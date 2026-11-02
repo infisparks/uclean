@@ -7,6 +7,8 @@ export interface CatalogService {
   rate: string;
   category: string;
   keywords: string;
+  badge?: string;
+  subtitle?: string;
   isPrimary?: boolean;
 }
 
@@ -80,6 +82,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: 'From ₹119/item',
     category: "Men's Wear",
     keywords: "men suits blazer ethnic sherwani tuxedo kurta dhoti coat indowestern wedding dry cleaning",
+    badge: '⭐ Executive Care',
+    subtitle: 'Suits, blazers & sherwanis',
     isPrimary: true,
   },
   {
@@ -89,6 +93,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: 'From ₹69/item',
     category: "Women's Ethnic",
     keywords: "women ethnic saree spa lehenga choli silk banarasi dupatta bridal festive dry cleaning",
+    badge: '🥻 Silk & Zari Safe',
+    subtitle: 'Sarees, lehengas & suits',
     isPrimary: true,
   },
   {
@@ -98,6 +104,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: 'From ₹99/item',
     category: 'Winter & Leather',
     keywords: 'winterwear leather jacket coat sweater cardigan puffer fur overcoat dry cleaning',
+    badge: '🧥 Gentle Cycle',
+    subtitle: 'Jackets, sweaters & coats',
     isPrimary: true,
   },
   {
@@ -107,6 +115,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: 'From ₹25/item',
     category: 'Laundry & Press',
     keywords: 'shirts pants steam press trousers jeans daily wear office charak creasing iron',
+    badge: '💼 Daily Workwear',
+    subtitle: 'Crisp charak steam crease',
     isPrimary: true,
   },
   {
@@ -116,6 +126,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: '₹109/kg',
     category: 'Laundry & Press',
     keywords: 'wash fold laundry kg everyday clothes regular tshirts shirts pants shorts',
+    badge: '🔥 Most Popular',
+    subtitle: '~5-6 clothes/kg (avg ₹18/cloth)',
     isPrimary: true,
   },
   {
@@ -125,6 +137,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: '₹149/kg',
     category: 'Laundry & Press',
     keywords: 'wash iron steam pressed laundry kg shirts trousers formals',
+    badge: '⭐ Ready to Wear',
+    subtitle: 'Washed, ironed & folded',
     isPrimary: true,
   },
   {
@@ -134,6 +148,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: 'From ₹349/pair',
     category: 'Footwear',
     keywords: 'shoe sneakers boots leather footwear spa sports white shoes restoration',
+    badge: '👟 Deep Sanitized',
+    subtitle: 'Sneakers, sports & leather',
     isPrimary: true,
   },
   {
@@ -143,6 +159,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: 'From ₹30/sq.ft',
     category: 'Home Care',
     keywords: 'sofa couch carpet upholstery shampoo rug cushion living room',
+    badge: '🛋️ Foam Deep Clean',
+    subtitle: 'Carpets, sofas & mattresses',
     isPrimary: true,
   },
   {
@@ -152,6 +170,8 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: '₹45/sq.ft',
     category: 'Home Care',
     keywords: 'curtain parda drape window door sheer lining blackout fabric',
+    badge: '🪟 Free Unhook & Hang',
+    subtitle: 'Steam refresh & dust extraction',
     isPrimary: true,
   },
   {
@@ -161,8 +181,301 @@ export const PRIMARY_SERVICES: CatalogService[] = [
     rate: 'From ₹25/item',
     category: 'Accessories',
     keywords: 'shawl pashmina toosh lohi muffler woolen cashmere scarf tie',
+    badge: '🧣 Pure Pashmina Safe',
+    subtitle: 'Ties, shawls & stoles',
     isPrimary: true,
   },
+];
+
+// 1.1 Category-Specific Service Collections with Human Psychology Pricing & Ranking (Cheap On Top)
+export const WASH_FOLD_SERVICES: CatalogService[] = [
+  {
+    id: 'Undergarments & Socks — from ₹19',
+    name: 'Undergarments & Socks',
+    icon: '🧦',
+    rate: 'From ₹19',
+    category: 'Wash & Fold',
+    keywords: 'undergarments underwear socks innerwear vests handkerchiefs',
+    badge: '🧴 Lowest Price',
+    subtitle: 'Antibacterial hygienic wash',
+    isPrimary: true,
+  },
+  {
+    id: 'Daily Wear (T-Shirts & Tops) — from ₹25',
+    name: 'Daily T-Shirts & Tops',
+    icon: '👕',
+    rate: 'From ₹25',
+    category: 'Wash & Fold',
+    keywords: 'tshirts shirts tops polos casual daily wear cotton',
+    badge: '⚡ Most Worn Daily',
+    subtitle: 'Light wash & neat fold',
+    isPrimary: true,
+  },
+  {
+    id: 'Office Shirts & Trousers — from ₹25',
+    name: 'Office Shirts & Trousers',
+    icon: '👔',
+    rate: 'From ₹25',
+    category: 'Wash & Fold',
+    keywords: 'shirts trousers formal pants jeans office regular wear',
+    badge: '💼 Daily Workwear',
+    subtitle: 'Wash with crisp charak press',
+    isPrimary: true,
+  },
+  {
+    id: 'Bedsheets, Linens & Towels — from ₹49',
+    name: 'Bedsheets & Bath Towels',
+    icon: '🛏️',
+    rate: 'From ₹49',
+    category: 'Wash & Fold',
+    keywords: 'bedsheet bed cover pillow covers bath towels napkins linens',
+    badge: '🏠 Home Essentials',
+    subtitle: 'Fresh, soft & hygienic',
+    isPrimary: true,
+  },
+  {
+    id: 'Wash & Fold Laundry',
+    name: 'Wash & Fold Laundry',
+    icon: '🧺',
+    rate: '₹109/kg',
+    category: 'Wash & Fold',
+    keywords: 'wash fold laundry kg everyday clothes regular tshirts shirts pants shorts',
+    badge: '🔥 Most Popular (Per Kg)',
+    subtitle: '~5-6 daily clothes/kg (approx ₹18/cloth)',
+    isPrimary: true,
+  },
+  {
+    id: 'Wash & Steam Iron',
+    name: 'Wash & Steam Iron',
+    icon: '✨',
+    rate: '₹149/kg',
+    category: 'Wash & Fold',
+    keywords: 'wash iron steam pressed laundry kg shirts trousers formals',
+    badge: '⭐ Ready-to-Wear',
+    subtitle: 'Washed, ironed & folded',
+    isPrimary: true,
+  },
+];
+
+export const WASH_IRON_SERVICES: CatalogService[] = [
+  {
+    id: 'Wash & Steam Iron',
+    name: 'Wash & Steam Iron',
+    icon: '👔',
+    rate: '₹149/kg',
+    category: 'Wash & Iron',
+    keywords: 'wash iron steam pressed laundry kg shirts trousers formals',
+    badge: '🔥 Best Value',
+    subtitle: 'Wash + steam press by kg',
+    isPrimary: true,
+  },
+  {
+    id: 'Steam Press Only — from ₹25',
+    name: 'Steam Ironing (Charak)',
+    icon: '💨',
+    rate: 'From ₹25',
+    category: 'Wash & Iron',
+    keywords: 'steam press iron charak creasing wrinkle free shirts pants',
+    badge: '⚡ Wrinkle-Free',
+    subtitle: 'Sharp professional creases',
+    isPrimary: true,
+  },
+  {
+    id: 'Office Shirts & Trousers — from ₹25',
+    name: 'Shirts & Trousers Press',
+    icon: '👕',
+    rate: 'From ₹25',
+    category: 'Wash & Iron',
+    keywords: 'shirts trousers pants daily office press',
+    badge: '💼 Daily Workwear',
+    subtitle: 'Crisp hanger or fold',
+    isPrimary: true,
+  },
+  {
+    id: 'Wash & Fold Laundry',
+    name: 'Wash & Fold Laundry',
+    icon: '🧺',
+    rate: '₹109/kg',
+    category: 'Wash & Iron',
+    keywords: 'wash fold laundry kg regular clothes',
+    badge: '🧺 Economy Option',
+    subtitle: 'Clean everyday laundry',
+    isPrimary: true,
+  },
+  {
+    id: 'Saree & Kurta Steam Press — from ₹49',
+    name: 'Sarees & Kurta Press',
+    icon: '🥻',
+    rate: 'From ₹49',
+    category: 'Wash & Iron',
+    keywords: 'saree kurta pajama steam press ethnic silk roll press',
+    badge: '✨ Roll Press',
+    subtitle: 'Gentle fabric care',
+    isPrimary: true,
+  },
+  {
+    id: 'Blazer & Coat Steam Press — from ₹99',
+    name: 'Blazer & Coat Press',
+    icon: '🧥',
+    rate: 'From ₹99',
+    category: 'Wash & Iron',
+    keywords: 'blazer suit jacket coat steam press formals',
+    badge: '👔 Executive Formals',
+    subtitle: '3D mannequin steam finish',
+    isPrimary: true,
+  },
+];
+
+export const DRY_CLEANING_SERVICES: CatalogService[] = [
+  {
+    id: "Men's Suits & Ethnic",
+    name: "Men's Suits & Ethnic",
+    icon: '👔',
+    rate: 'From ₹119/item',
+    category: 'Dry Cleaning',
+    keywords: 'men suits blazer ethnic sherwani tuxedo kurta dhoti coat',
+    badge: '⭐ Executive Care',
+    subtitle: 'Solvent dry clean & steam form',
+    isPrimary: true,
+  },
+  {
+    id: "Women's Ethnic & Saree Spa",
+    name: "Women's Ethnic & Saree",
+    icon: '🥻',
+    rate: 'From ₹69/item',
+    category: 'Dry Cleaning',
+    keywords: 'women ethnic saree spa lehenga choli silk banarasi dupatta',
+    badge: '🥻 Silk & Zari Safe',
+    subtitle: 'Color-preserving gentle spa',
+    isPrimary: true,
+  },
+  {
+    id: 'Winterwear & Leather Care',
+    name: 'Winterwear & Jackets',
+    icon: '🧥',
+    rate: 'From ₹99/item',
+    category: 'Dry Cleaning',
+    keywords: 'winterwear leather jacket coat sweater cardigan puffer fur',
+    badge: '🧥 Deep De-pilling',
+    subtitle: 'Odor & lint removal',
+    isPrimary: true,
+  },
+  {
+    id: 'Designer Gowns & Dresses — from ₹299',
+    name: 'Designer Gowns & Dresses',
+    icon: '✨',
+    rate: 'From ₹299',
+    category: 'Dry Cleaning',
+    keywords: 'gown dress western maxi party evening wear cocktail dress',
+    badge: '💃 Delicate Beaded',
+    subtitle: 'Embellishment protection',
+    isPrimary: true,
+  },
+  {
+    id: 'Footwear & Designer Shoe Spa',
+    name: 'Footwear & Shoe Spa',
+    icon: '👟',
+    rate: 'From ₹349/pair',
+    category: 'Dry Cleaning',
+    keywords: 'shoe sneakers boots leather footwear spa sports white shoes',
+    badge: '👟 Soles & Upper Restored',
+    subtitle: 'Deep cleaning & deodorizing',
+    isPrimary: true,
+  },
+  {
+    id: 'Shawls, Pashmina & Ties',
+    name: 'Shawls & Pashmina Spa',
+    icon: '🧣',
+    rate: 'From ₹25/item',
+    category: 'Dry Cleaning',
+    keywords: 'shawl pashmina toosh lohi muffler woolen cashmere scarf tie',
+    badge: '🧣 Pure Cashmere Safe',
+    subtitle: 'Soft conditioning cycle',
+    isPrimary: true,
+  },
+];
+
+export const HOME_TEXTILES_SERVICES: CatalogService[] = [
+  {
+    id: 'Lining Curtain — ₹45/sq. ft.',
+    name: 'Curtains & Drapes (Parda)',
+    icon: '🪟',
+    rate: 'From ₹45/sq.ft',
+    category: 'Home Textiles',
+    keywords: 'curtain parda drape window door sheer lining blackout fabric',
+    badge: '🪟 Free Unhook & Hang',
+    subtitle: 'Dust & allergen deep removal',
+    isPrimary: true,
+  },
+  {
+    id: 'Carpet & Rug Rotary Shampooing — ₹30/sq.ft',
+    name: 'Carpet & Rug Washing',
+    icon: '🧼',
+    rate: 'From ₹30/sq.ft',
+    category: 'Home Textiles',
+    keywords: 'carpet rug floor mat kashmiri rotary shampoo deep suction',
+    badge: '🧼 Rotary Injection',
+    subtitle: 'Stain extraction & quick dry',
+    isPrimary: true,
+  },
+  {
+    id: 'Home Textiles & Sofa Cleaning',
+    name: 'Sofa & Upholstery Care',
+    icon: '🛋️',
+    rate: 'From ₹199/seat',
+    category: 'Home Textiles',
+    keywords: 'sofa couch carpet upholstery shampoo rug cushion living room',
+    badge: '🛋️ Foam Deep Clean',
+    subtitle: 'Fabric & leather upholstery',
+    isPrimary: true,
+  },
+  {
+    id: 'Heavy Blankets & Kambal Washing — from ₹249',
+    name: 'Blankets & Heavy Kambal',
+    icon: '🧶',
+    rate: 'From ₹249',
+    category: 'Home Textiles',
+    keywords: 'blanket kambal duvet comforter heavy winter rajai mink',
+    badge: '🧶 100% Germ-Free',
+    subtitle: 'Fluffing & hygienic sanitize',
+    isPrimary: true,
+  },
+  {
+    id: 'Mattress & Quilt Steam Sanitization — from ₹199',
+    name: 'Mattress & Quilt Sanitization',
+    icon: '🛏️',
+    rate: 'From ₹199',
+    category: 'Home Textiles',
+    keywords: 'mattress quilt pillow steam sanitization anti allergen bed bug bacteria',
+    badge: '🛏️ Anti-Dust Mite',
+    subtitle: 'High-temperature steam kill',
+    isPrimary: true,
+  },
+  {
+    id: 'Bedsheets, Linens & Towels — from ₹49',
+    name: 'Bedsheets & Pillow Covers',
+    icon: '🏠',
+    rate: 'From ₹49',
+    category: 'Home Textiles',
+    keywords: 'bedsheet linens bed cover pillow bath towel',
+    badge: '✨ Crisp & Clean',
+    subtitle: 'Fresh fragrant finish',
+    isPrimary: true,
+  },
+];
+
+export interface OrderCategoryTab {
+  id: string;
+  label: string;
+  icon: string;
+  services: CatalogService[];
+}
+
+export const ORDER_CATEGORIES: OrderCategoryTab[] = [
+  { id: 'wash-fold', label: 'Wash & Fold', icon: '🧺', services: WASH_FOLD_SERVICES },
+  { id: 'wash-iron', label: 'Wash & Iron', icon: '👔', services: WASH_IRON_SERVICES },
+  { id: 'dry-cleaning', label: 'Dry Cleaning', icon: '✨', services: DRY_CLEANING_SERVICES },
+  { id: 'home-textiles', label: 'Home Textiles', icon: '🛋️', services: HOME_TEXTILES_SERVICES },
 ];
 
 // 2. High-Demand Specialized Store Categories & Services

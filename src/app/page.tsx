@@ -17,10 +17,10 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<'store' | 'crm'>('store');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const handleOpenOrderForm = (service: string = 'Wash & Fold — ₹109/kg', garment: string = '') => {
+  const handleOpenOrderForm = (service: string = 'Wash & Fold Laundry', garment: string = '') => {
     const params = new URLSearchParams();
     if (service) params.set('service', service);
-    if (garment) params.set('garment', garment);
+    if (garment && garment.trim()) params.set('garment', garment.trim());
     router.push(`/order?${params.toString()}`);
   };
 
