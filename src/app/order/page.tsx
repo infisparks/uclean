@@ -350,36 +350,37 @@ function OrderFormContent() {
   return (
     <div className="app-container min-h-screen bg-[#FAF6EE] relative flex flex-col pb-12 font-light antialiased">
       
-      {/* 1. Executive Top Header Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#DECBB0] px-4 py-3 flex items-center justify-between shadow-2xs">
+      {/* 1. Executive Top Header Bar (100% Mobile Responsive) */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#DECBB0] px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 shadow-2xs">
+        {/* Left: Pure Back Icon Button */}
         <Link
           href="/"
-          className="flex items-center gap-1.5 text-xs font-semibold text-[#111827] hover:text-[#008f51] transition-colors py-1 px-3 rounded-full bg-[#FAF6EE] border border-[#DECBB0] active:scale-95"
+          aria-label="Back to store"
+          className="w-8 h-8 rounded-full bg-[#FAF6EE] border border-[#DECBB0] hover:border-[#008f51] text-[#111827] hover:text-[#008f51] flex items-center justify-center shrink-0 active:scale-95 transition-all shadow-2xs"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Store</span>
+          <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
         </Link>
 
-        {/* Brand Center */}
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-gradient-to-br from-[#008f51] to-[#05a862] rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-xs border border-white/20">
+        {/* Brand Center / Left-Center */}
+        <Link href="/" className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <div className="w-7 h-7 sm:w-7.5 sm:h-7.5 bg-gradient-to-br from-[#008f51] to-[#05a862] rounded-xl flex items-center justify-center font-black text-white text-xs shadow-xs border border-white/20 shrink-0">
             U
           </div>
-          <div className="text-left leading-none">
+          <div className="text-left leading-tight min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-xs font-black text-[#111827] tracking-tight">UCLEAN</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#008f51] animate-pulse" />
+              <span className="text-xs sm:text-sm font-black text-[#111827] tracking-tight">UCLEAN</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#008f51] animate-pulse shrink-0" />
             </div>
-            <span className="text-[9.5px] font-semibold text-[#008f51]">Nerul West Store</span>
+            <span className="text-[9px] sm:text-[9.5px] font-semibold text-[#008f51] block truncate">Nerul West Store</span>
           </div>
-        </div>
+        </Link>
 
-        {/* Store Dial */}
+        {/* Store Dial Right */}
         <a
           href="tel:+917400474132"
-          className="flex items-center gap-1.5 text-[11px] font-bold text-[#008f51] bg-[#eaf8f1] border border-[#a7f3d0] px-3 py-1 rounded-full hover:bg-[#008f51] hover:text-white transition-all active:scale-95 shadow-2xs"
+          className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-extrabold text-[#00874c] bg-[#eaf8f1] border border-[#a7f3d0] px-2.5 sm:px-3 py-1 rounded-full hover:bg-[#008f51] hover:text-white transition-all active:scale-95 shadow-2xs shrink-0"
         >
-          <Phone className="w-3 h-3" />
+          <Phone className="w-3 h-3 shrink-0" />
           <span>+91 74004 74132</span>
         </a>
       </header>
@@ -945,26 +946,6 @@ function OrderFormContent() {
                         onChange={(e) => setItems(e.target.value)}
                         className="w-full h-10 pl-8 pr-2.5 rounded-xl border border-[#E5E7EB] bg-[#FAF6EE]/30 focus:bg-white text-[12.5px] text-[#111827] placeholder:text-[#9CA3AF] placeholder:text-[11.5px] focus:outline-none focus:border-[#008f51] focus:ring-2 focus:ring-[#008f51]/15 transition-all"
                       />
-                    </div>
-                    {/* Quick 1-tap chips for everyday garments */}
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {['Daily T-Shirts', 'Shirts & Pants', 'Jeans & Shorts', 'Towels & Linens', 'Undergarments'].map((chip) => (
-                        <button
-                          key={chip}
-                          type="button"
-                          onClick={() => {
-                            setItems((prev) => {
-                              const cleaned = prev ? prev.trim() : '';
-                              if (!cleaned) return chip;
-                              if (cleaned.toLowerCase().includes(chip.toLowerCase())) return cleaned;
-                              return `${cleaned}, ${chip}`;
-                            });
-                          }}
-                          className="px-1.5 py-0.5 rounded-md bg-[#FAF6EE] border border-[#DECBB0] text-[9.5px] font-medium text-[#4A5D52] hover:bg-[#e6f4ea] hover:text-[#008f51] hover:border-[#008f51] transition-colors cursor-pointer"
-                        >
-                          + {chip}
-                        </button>
-                      ))}
                     </div>
                   </div>
 
